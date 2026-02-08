@@ -3,29 +3,31 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import statsmodels.formula.api as smf
+from scipy import stats
+from statsmodels.stats.sandwich_covariance import cov_cluster_2groups
 
 # =============================
 # App Identity
 # =============================
 APP_NAME = "Difference-in-Differences Studio"
-APP_SUBTITLE = "Difference-in-Differences estimator with diagnostics, plots, and placebo checks."
+APP_SUBTITLE = "DiD estimator with plots + placebo diagnostics + robust / clustered SEs."
 
 st.set_page_config(page_title=APP_NAME, page_icon="📊", layout="wide")
 
 # =============================
-# Readability defaults (NO UI CONTROLS)
+# Readability defaults
 # =============================
-font_scale = 1.15
+font_scale = 1.12
 line_height = 1.60
-page_width = 1350
+page_width = 1400
 
 # =============================
-# Global Styling (LIGHT THEME)
+# Global Styling (LIGHT)
 # =============================
 st.markdown(
     f"""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
 
 :root {{
   --font-scale: {font_scale};
@@ -43,7 +45,7 @@ st.markdown(
 
 .block-container {{
   max-width: var(--max-width);
-  padding-top: 1.4rem;
+  padding-top: 1.2rem;
 }}
 
 header, footer {{
@@ -81,7 +83,7 @@ div[data-baseweb="select"] > div {{
 /* Tabs */
 div[data-testid="stTabs"] button {{
   color: #4b5563 !important;
-  font-weight: 600;
+  font-weight: 650;
   font-size: calc(1.05rem * var(--font-scale));
 }}
 div[data-testid="stTabs"] button[aria-selected="true"] {{
@@ -109,7 +111,7 @@ div[data-testid="stMetric"] {{
 }}
 div[data-testid="stMetricValue"] {{
   color: #000000 !important;
-  font-weight: 800;
+  font-weight: 850;
 }}
 div[data-testid="stMetricLabel"] {{
   color: #374151 !important;
@@ -127,28 +129,123 @@ section[data-testid="stFileUploaderDropzone"] {{
 )
 
 # =============================
+# Helpers
+# =============================
+def default_index(cols: pd.Index, preferred: str) -> int:
+    return int(cols.get_loc(preferred)) if preferred in cols else 0
+
+def coerce_binary01(s: pd.Series) -> pd.Series:
+    # coerce to 0/1
+    sn = pd.to_numeric(s, errors="coerce")
+    # if already 0/1, keep
+    vals = set(sn.dropna().unique().tolist())
+    if vals.issubset({0, 1}):
+        return sn.astype(float)
+    # else rule: >0 becomes 1 else 0
+    return (sn.fillna(0) > 0).astype(int).astype(float)
+
+def sorted_unique_times(dfm: pd.DataFrame) -> list:
+    t = dfm["time"].copy()
+    # numeric sort if possible
+    tn = pd.to_numeric(t, errors="coerce")
+    if tn.notna().mean() >= 0.9:
+        return sorted(pd.unique(tn.dropna()).tolist())
+    # datetime sort if possible
+    td = pd.to_datetime(t, errors="coerce")
+    if td.notna().mean() >= 0.9:
+        return sorted(pd.unique(td.dropna()).tolist())
+    # fallback
+    return sorted(pd.unique(t.dropna()).tolist(), key=lambda x: str(x))
+
+def infer_post_start(dfm: pd.DataFrame):
+    post_rows = dfm.loc[dfm["post"] == 1]
+    if post_rows.empty:
+        return None
+    # earliest post time
+    times = post_rows["time"]
+    tn = pd.to_numeric(times, errors="coerce")
+    if tn.notna().mean() >= 0.9:
+        return tn.min()
+    td = pd.to_datetime(times, errors="coerce")
+    if td.notna().mean() >= 0.9:
+        return td.min()
+    # fallback
+    return sorted_unique_times(dfm.loc[dfm["post"] == 1])[0]
+
+def has_all_cells(df, treat_col, post_col) -> bool:
+    c = df.groupby([treat_col, post_col]).size().reset_index(name="n")
+    have = set(zip(c[treat_col].astype(float), c[post_col].astype(float)))
+    needed = {(0.0, 0.0), (0.0, 1.0), (1.0, 0.0), (1.0, 1.0)}
+    return (needed - have) == set()
+
+def term_in_results(res, term: str) -> bool:
+    return hasattr(res, "params") and term in res.params.index
+
+def robust_term_stats(res, term: str, alpha: float):
+    # for results that already contain robust bse/pvalues/confint
+    coef = float(res.params.get(term, np.nan))
+    se = float(res.bse.get(term, np.nan))
+    pval = float(res.pvalues.get(term, np.nan))
+    ci = res.conf_int(alpha=alpha).loc[term].tolist()
+    return coef, se, pval, float(ci[0]), float(ci[1])
+
+def twoway_term_stats(res_base, term: str, alpha: float, g1, g2):
+    # two-way clustered covariance matrix
+    V = cov_cluster_2groups(res_base, g1, g2)
+    idx = list(res_base.params.index).index(term)
+    coef = float(res_base.params[term])
+    se = float(np.sqrt(V[idx, idx]))
+    tval = coef / se if se > 0 else np.nan
+
+    df_resid = float(getattr(res_base, "df_resid", np.nan))
+    # conservative: use t distribution
+    pval = float(2 * stats.t.sf(np.abs(tval), df=df_resid)) if np.isfinite(df_resid) else np.nan
+    tcrit = float(stats.t.ppf(1 - alpha / 2, df=df_resid)) if np.isfinite(df_resid) else np.nan
+    ci_low = coef - tcrit * se if np.isfinite(tcrit) else np.nan
+    ci_high = coef + tcrit * se if np.isfinite(tcrit) else np.nan
+    return coef, se, pval, float(ci_low), float(ci_high)
+
+def fit_with_se(df, formula: str, se_mode: str, alpha: float):
+    """
+    se_mode ∈ {"Robust (HC1)", "Cluster: unit", "Cluster: time", "Two-way: unit & time"}
+    Returns: (res_base, res_for_reporting, se_label)
+    """
+    model = smf.ols(formula, data=df)
+    res_base = model.fit()
+
+    if se_mode == "Robust (HC1)":
+        res_rep = res_base.get_robustcov_results(cov_type="HC1")
+        return res_base, res_rep, "Robust (HC1)"
+
+    if se_mode == "Cluster: unit":
+        res_rep = res_base.get_robustcov_results(cov_type="cluster", groups=df["unit"])
+        return res_base, res_rep, "Cluster-robust (by unit)"
+
+    if se_mode == "Cluster: time":
+        res_rep = res_base.get_robustcov_results(cov_type="cluster", groups=df["time"])
+        return res_base, res_rep, "Cluster-robust (by time)"
+
+    if se_mode == "Two-way: unit & time":
+        # no native robust-results wrapper; compute term stats from cov matrix when needed
+        return res_base, None, "Two-way cluster (unit & time)"
+
+    # fallback
+    res_rep = res_base.get_robustcov_results(cov_type="HC1")
+    return res_base, res_rep, "Robust (HC1)"
+
+# =============================
 # Synthetic data generator
 # =============================
 def generate_synthetic(seed=7, n_units=200, n_periods=10, effect=2.0):
     rng = np.random.default_rng(seed)
-    rows = []
     cutoff = 6
-
+    rows = []
     for u in range(n_units):
         treated = int(u < n_units / 2)
         for t in range(n_periods):
             post = int(t >= cutoff)
-            y = 5 + 0.3 * t + 0.5 * treated + effect * (treated * post)
-            y += rng.normal(0, 1)
-            rows.append(
-                {
-                    "unit_id": u,
-                    "time": t,
-                    "treated": treated,
-                    "post": post,
-                    "y": y,
-                }
-            )
+            y = 5 + 0.25 * t + 0.5 * treated + effect * (treated * post) + rng.normal(0, 1)
+            rows.append({"unit_id": u, "time": t, "treated": treated, "post": post, "y": y})
     return pd.DataFrame(rows)
 
 # =============================
@@ -165,71 +262,77 @@ uploaded = st.file_uploader("Upload CSV", type=["csv"])
 use_synth = st.checkbox("Use synthetic dataset (if no file uploaded)", value=(uploaded is None))
 
 if uploaded is not None:
-    df = pd.read_csv(uploaded)
+    df_raw = pd.read_csv(uploaded)
 else:
     if use_synth:
-        df = generate_synthetic()
+        df_raw = generate_synthetic()
     else:
         st.info("Upload a CSV or enable the synthetic dataset checkbox.")
         st.stop()
 
-if df.empty:
+if df_raw.empty:
     st.error("Dataset is empty.")
     st.stop()
-
-# =============================
-# Robust default selector
-# =============================
-def default_index(cols: pd.Index, preferred: str) -> int:
-    return int(cols.get_loc(preferred)) if preferred in cols else 0
 
 # =============================
 # Sidebar – Model Setup
 # =============================
 with st.sidebar:
     st.header("Model setup")
-    cols = df.columns
+    cols = df_raw.columns
 
-    outcome = st.selectbox("Outcome (Y)", cols, index=default_index(cols, "y"))
-    unit = st.selectbox("Unit ID", cols, index=default_index(cols, "unit_id"))
-    time = st.selectbox("Time", cols, index=default_index(cols, "time"))
-    treated = st.selectbox("Treated (0/1)", cols, index=default_index(cols, "treated"))
-    post = st.selectbox("Post (0/1)", cols, index=default_index(cols, "post"))
+    outcome_col = st.selectbox("Outcome (Y)", cols, index=default_index(cols, "y"))
+    unit_col = st.selectbox("Unit ID", cols, index=default_index(cols, "unit_id"))
+    time_col = st.selectbox("Time", cols, index=default_index(cols, "time"))
+    treated_col = st.selectbox("Treated (0/1)", cols, index=default_index(cols, "treated"))
+    post_col = st.selectbox("Post (0/1)", cols, index=default_index(cols, "post"))
 
-    cluster = st.checkbox("Cluster SE by unit", value=True)
+    se_mode = st.selectbox(
+        "Standard errors",
+        [
+            "Robust (HC1)",
+            "Cluster: unit",
+            "Cluster: time",
+            "Two-way: unit & time",
+        ],
+        index=1,
+    )
+
+    alpha = st.selectbox("Significance level α", [0.10, 0.05, 0.01], index=1)
 
 # =============================
-# Prepare modeling data
+# Build modeling DF
 # =============================
-dfm = df[[outcome, unit, time, treated, post]].copy()
+dfm = df_raw[[outcome_col, unit_col, time_col, treated_col, post_col]].copy()
 dfm = dfm.dropna()
 dfm.columns = ["y", "unit", "time", "treated", "post"]
 
-# coerce to numeric for safety
 dfm["y"] = pd.to_numeric(dfm["y"], errors="coerce")
-dfm["treated"] = pd.to_numeric(dfm["treated"], errors="coerce")
-dfm["post"] = pd.to_numeric(dfm["post"], errors="coerce")
-dfm = dfm.dropna(subset=["y", "treated", "post", "unit", "time"])
+dfm["treated"] = coerce_binary01(dfm["treated"])
+dfm["post"] = coerce_binary01(dfm["post"])
+dfm = dfm.dropna(subset=["y", "unit", "time", "treated", "post"])
 
-if len(dfm) < 10:
+if len(dfm) < 20:
     st.warning("Very few observations after cleaning. Results may be unstable.")
 
 # =============================
-# Fit DiD
+# Fit main DiD
 # =============================
-try:
-    model = smf.ols("y ~ treated + post + treated:post", data=dfm)
-    if cluster:
-        res = model.fit(cov_type="cluster", cov_kwds={"groups": dfm["unit"]})
-        se_type = "Cluster-robust (by unit)"
-    else:
-        res = model.fit(cov_type="HC1")
-        se_type = "Robust (HC1)"
+formula_main = "y ~ treated + post + treated:post"
+term_main = "treated:post"
 
-    coef = float(res.params.get("treated:post", np.nan))
-    pval = float(res.pvalues.get("treated:post", np.nan))
-    ci = res.conf_int().loc["treated:post"].tolist()
-    ci_low, ci_high = float(ci[0]), float(ci[1])
+try:
+    res_base, res_rep, se_label = fit_with_se(dfm, formula_main, se_mode, alpha=alpha)
+
+    if se_mode == "Two-way: unit & time":
+        if not term_in_results(res_base, term_main):
+            raise ValueError("Key term not found in model.")
+        coef, se, pval, ci_low, ci_high = twoway_term_stats(
+            res_base, term_main, alpha, dfm["unit"], dfm["time"]
+        )
+    else:
+        coef, se, pval, ci_low, ci_high = robust_term_stats(res_rep, term_main, alpha)
+
 except Exception as e:
     st.error(f"Model failed to run: {e}")
     st.stop()
@@ -238,33 +341,33 @@ except Exception as e:
 # Tabs
 # =============================
 tab1, tab2, tab3, tab4, tab5 = st.tabs(
-    ["📄 Preview", "📌 Estimate", "📈 Plots", "🧪 Diagnostics", "📝 Summary"]
+    ["📄 Preview", "📌 Estimate", "📈 Plots", "🧪 Placebos", "📝 Summary"]
 )
 
 with tab1:
     st.subheader("Data Preview")
-    st.dataframe(df.head(25), use_container_width=True)
+    st.dataframe(df_raw.head(25), use_container_width=True)
 
 with tab2:
     st.subheader("Main Estimate (DiD)")
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("DiD coef (treated×post)", f"{coef:.3f}")
-    c2.metric("p-value", f"{pval:.4g}")
-    c3.metric("CI low", f"{ci_low:.3f}")
-    c4.metric("CI high", f"{ci_high:.3f}")
-    st.caption(f"SE type: {se_type} | Model: y ~ treated + post + treated:post")
+    c1.metric("DiD coef (treated×post)", f"{coef:.4f}")
+    c2.metric("Std. Error", f"{se:.4f}")
+    c3.metric("p-value", f"{pval:.4g}")
+    c4.metric(f"{int((1-alpha)*100)}% CI", f"[{ci_low:.4f}, {ci_high:.4f}]")
+    st.caption(f"SE type: {se_label} | Model: {formula_main}")
 
 with tab3:
     st.subheader("Parallel Trends Plot (Average Y over time)")
     try:
         g = dfm.groupby(["time", "treated"])["y"].mean().reset_index()
-        pivot = g.pivot(index="time", columns="treated", values="y").sort_index()
+        pt = g.pivot(index="time", columns="treated", values="y").sort_index()
 
         fig, ax = plt.subplots(figsize=(8, 4))
-        if 0 in pivot.columns:
-            ax.plot(pivot.index, pivot[0], marker="o", label="Control (treated=0)")
-        if 1 in pivot.columns:
-            ax.plot(pivot.index, pivot[1], marker="o", label="Treated (treated=1)")
+        if 0.0 in pt.columns:
+            ax.plot(pt.index, pt[0.0], marker="o", label="Control (treated=0)")
+        if 1.0 in pt.columns:
+            ax.plot(pt.index, pt[1.0], marker="o", label="Treated (treated=1)")
         ax.set_xlabel("Time")
         ax.set_ylabel("Average outcome (Y)")
         ax.set_title("Average Y by group over time")
@@ -275,29 +378,132 @@ with tab3:
         st.error(f"Plot failed: {e}")
 
 with tab4:
-    st.subheader("Diagnostics (Basic)")
+    st.subheader("Placebo tests")
+
     st.markdown(
         """
-- **Parallel trends:** In the pre-period, treated and control should move similarly.  
-- **If pre-trends differ:** your DiD estimate may reflect trend differences (not causal).
+**How to interpret:**
+- Placebo effects should be near **0** and **not significant**.
+- If placebos are significant, your result may reflect **pre-trends** (not causal).
 """
     )
+
+    # ---------- Placebo A: shift earlier ----------
+    st.markdown("### Placebo A — Fake policy date (shift post earlier)")
+    post_start = infer_post_start(dfm)
+    times = sorted_unique_times(dfm)
+
+    if post_start is None or len(times) < 3:
+        st.info("Placebo A unavailable (need a real post period and multiple time points).")
+    else:
+        # locate cutoff index (best effort)
+        try:
+            cutoff_idx = times.index(post_start)
+        except ValueError:
+            cutoff_idx = max(1, len(times) // 2)
+
+        max_k = max(1, cutoff_idx)
+        K = st.slider("Shift earlier by K time steps", min_value=1, max_value=int(max_k), value=1, step=1)
+        placebo_cutoff = times[max(0, cutoff_idx - K)]
+
+        dfA = dfm.copy()
+        dfA["placebo_post"] = (pd.to_numeric(dfA["time"], errors="coerce") >= placebo_cutoff).astype(int).astype(float) \
+            if pd.to_numeric(pd.Series(times), errors="coerce").notna().mean() >= 0.9 \
+            else (dfA["time"] >= placebo_cutoff).astype(int).astype(float)
+
+        if not has_all_cells(dfA, "treated", "placebo_post"):
+            st.warning("Placebo A missing some 2×2 cells (treated/control × placebo pre/post).")
+        else:
+            formulaA = "y ~ treated + placebo_post + treated:placebo_post"
+            termA = "treated:placebo_post"
+
+            try:
+                A_base, A_rep, A_se_label = fit_with_se(dfA, formulaA, se_mode, alpha=alpha)
+                if se_mode == "Two-way: unit & time":
+                    A_coef, A_se, A_p, A_ciL, A_ciH = twoway_term_stats(A_base, termA, alpha, dfA["unit"], dfA["time"])
+                else:
+                    A_coef, A_se, A_p, A_ciL, A_ciH = robust_term_stats(A_rep, termA, alpha)
+
+                a1, a2, a3, a4 = st.columns(4)
+                a1.metric("Placebo A coef", f"{A_coef:.4f}")
+                a2.metric("Std. Error", f"{A_se:.4f}")
+                a3.metric("p-value", f"{A_p:.4g}")
+                a4.metric(f"{int((1-alpha)*100)}% CI", f"[{A_ciL:.4f}, {A_ciH:.4f}]")
+
+                st.caption(f"Real cutoff: {post_start} | Placebo cutoff: {placebo_cutoff} | SE: {A_se_label}")
+
+            except Exception as e:
+                st.error(f"Placebo A failed: {e}")
+
+    st.divider()
+
+    # ---------- Placebo B: pre-only fake cutoff ----------
+    st.markdown("### Placebo B — Pre-period only fake cutoff (tests differential pre-trends)")
+    df_pre = dfm.loc[dfm["post"] == 0].copy()
+
+    if df_pre.empty or df_pre["treated"].nunique() < 2:
+        st.info("Placebo B unavailable (need pre data with both treated and control).")
+    else:
+        pre_times = sorted_unique_times(df_pre)
+        if len(pre_times) < 4:
+            st.info("Placebo B unavailable (need ≥ 4 distinct pre time points).")
+        else:
+            inner = pre_times[1:-1]
+            fake_cutoff = st.selectbox("Choose fake cutoff within PRE", options=inner, index=len(inner)//2)
+
+            dfB = df_pre.copy()
+            dfB["placebo_post_pre"] = (pd.to_numeric(dfB["time"], errors="coerce") >= fake_cutoff).astype(int).astype(float) \
+                if pd.to_numeric(pd.Series(pre_times), errors="coerce").notna().mean() >= 0.9 \
+                else (dfB["time"] >= fake_cutoff).astype(int).astype(float)
+
+            if not has_all_cells(dfB, "treated", "placebo_post_pre"):
+                st.warning("Placebo B missing some 2×2 cells (treated/control × placebo pre/post).")
+            else:
+                formulaB = "y ~ treated + placebo_post_pre + treated:placebo_post_pre"
+                termB = "treated:placebo_post_pre"
+
+                try:
+                    B_base, B_rep, B_se_label = fit_with_se(dfB, formulaB, se_mode, alpha=alpha)
+                    if se_mode == "Two-way: unit & time":
+                        B_coef, B_se, B_p, B_ciL, B_ciH = twoway_term_stats(B_base, termB, alpha, dfB["unit"], dfB["time"])
+                    else:
+                        B_coef, B_se, B_p, B_ciL, B_ciH = robust_term_stats(B_rep, termB, alpha)
+
+                    b1, b2, b3, b4 = st.columns(4)
+                    b1.metric("Placebo B coef", f"{B_coef:.4f}")
+                    b2.metric("Std. Error", f"{B_se:.4f}")
+                    b3.metric("p-value", f"{B_p:.4g}")
+                    b4.metric(f"{int((1-alpha)*100)}% CI", f"[{B_ciL:.4f}, {B_ciH:.4f}]")
+
+                    st.caption(f"Fake cutoff (within pre): {fake_cutoff} | SE: {B_se_label}")
+
+                except Exception as e:
+                    st.error(f"Placebo B failed: {e}")
 
 with tab5:
     st.subheader("Plain-English Summary")
+
+    sig = "Yes" if (np.isfinite(pval) and pval < 0.05) else "No"
+    direction = "increases" if coef > 0 else ("decreases" if coef < 0 else "does not change")
+
     st.markdown(
         f"""
-- **Estimated effect (treated×post):** **{coef:.3f}**  
-- **p-value:** **{pval:.4g}**  
-- **Statistically significant (α = 0.05):** **{"Yes" if (np.isfinite(pval) and pval < 0.05) else "No"}**
+- **Estimated effect (treated×post):** **{coef:.4f}**
+- **p-value:** **{pval:.4g}**
+- **Statistically significant (α=0.05):** **{sig}**
+- **SE type:** **{se_label}**
 
-This compares how the treated group changed from **before → after** the intervention,
-and subtracts how the control group changed over the same period.
+**Meaning:**  
+After the intervention starts, the treated group’s outcome **{direction}** relative to the control group (net of general pre→post changes).
 
-For a **causal** interpretation, the treated and control groups must follow **parallel trends**
-in the absence of treatment.
+**When it’s causal:**  
+Only if treated and control would have followed **parallel trends** without the intervention.
+
+**Red flags:**  
+If placebo tests are significant, your estimate may be capturing **pre-trends** rather than the treatment effect.
 """
     )
+
 
 
 
