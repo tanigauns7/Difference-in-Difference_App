@@ -15,15 +15,13 @@ APP_SUBTITLE = "Difference-in-Differences estimator with diagnostics, plots, and
 st.set_page_config(page_title=APP_NAME, page_icon="📊", layout="wide")
 
 # =============================
-# Sidebar: Display controls (READABILITY)
+# Readability defaults (no UI controls)
 # =============================
-with st.sidebar:
-    st.header("Display (Readability)")
-    font_scale = st.slider("Font size", 0.95, 1.50, 1.20, 0.05)
-    line_height = st.slider("Line spacing", 1.20, 1.90, 1.55, 0.05)
-    page_width = st.slider("Content width (px)", 900, 1600, 1280, 20)
-    contrast = st.slider("Contrast", 1.0, 1.4, 1.20, 0.05)
-    st.divider()
+font_scale = 1.15     # bump text size
+line_height = 1.60    # more breathing room
+page_width = 1350     # wider content area
+contrast = 1.15       # mild contrast boost
+
 
 # =============================
 # High-contrast Dark Theme Styling
