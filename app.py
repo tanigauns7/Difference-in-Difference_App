@@ -221,8 +221,7 @@ def build_formula(covariates: list) -> str:
 # ---- Robust statsmodels compatibility helpers (Series vs ndarray) ----
 def _get_exog_names(res) -> list:
     try:
-        names = list(res.model.exog_names)
-        return names
+        return list(res.model.exog_names)
     except Exception:
         return []
 
@@ -307,7 +306,6 @@ def compact_reg_table(res_any, alpha: float, top_terms: list = None) -> pd.DataF
     if top_terms is None:
         top_terms = []
 
-    names = []
     params = getattr(res_any, "params", None)
     if params is None:
         return pd.DataFrame()
@@ -334,21 +332,15 @@ def compact_reg_table(res_any, alpha: float, top_terms: list = None) -> pd.DataF
         ci_high = np.full_like(coef, np.nan, dtype=float)
 
     df_out = pd.DataFrame(
-        {
-            "term": names if len(names) == len(coef) else [f"x{i}" for i in range(len(coef))],
-            "coef": coef,
-            "se": se,
-            "t": tvals,
-            "p": pvals,
-            "ci_low": ci_low,
-            "ci_high": ci_high,
-        }
+        {"term": names, "coef": coef, "se": se, "t": tvals, "p": pvals, "ci_low": ci_low, "ci_high": ci_high}
     )
 
     if top_terms:
         order = [t for t in top_terms if t in df_out["term"].values]
         rest = [t for t in df_out["term"].tolist() if t not in order]
-        df_out["__order"] = df_out["term"].apply(lambda x: order.index(x) if x in order else (len(order) + rest.index(x)))
+        df_out["__order"] = df_out["term"].apply(
+            lambda x: order.index(x) if x in order else (len(order) + rest.index(x))
+        )
         df_out = df_out.sort_values("__order").drop(columns="__order")
 
     return df_out
@@ -409,9 +401,7 @@ def generate_synthetic(seed=7, n_units=200, n_periods=10, cutoff=6, effect=2.0):
                 + unit_fe[u]
                 + rng.normal(0, 1.0)
             )
-            rows.append(
-                {"unit_id": u, "time": t, "treated": treated, "post": post, "y": y, "x1": x1, "x2": x2}
-            )
+            rows.append({"unit_id": u, "time": t, "treated": treated, "post": post, "y": y, "x1": x1, "x2": x2})
     return pd.DataFrame(rows)
 
 
@@ -429,15 +419,17 @@ def numeric_like_columns(df: pd.DataFrame, min_non_na_share: float = 0.90) -> li
 # ============================================================
 st.markdown(f"# {APP_NAME}")
 st.caption(APP_SUBTITLE)
-st.info("Tip: Column mapping is below (even if your sidebar is collapsed).")
+
+# ✅ Big hint so users know where controls are
+st.info("Controls (column mapping + options) are in the left sidebar. If you don't see it, open the sidebar (top-left arrow).")
 
 # ============================================================
-# Data Input (EDITED)
+# Data Input (FIXED)
 # ============================================================
 st.subheader("Data input")
 uploaded = st.file_uploader("Upload a CSV file", type=["csv"])
 
-# ✅ Demo OFF by default, and disabled if a file is uploaded
+# ✅ FIX: Demo OFF by default; disable demo if file uploaded
 use_synth = st.checkbox(
     "Use synthetic dataset (demo)",
     value=False,
@@ -462,26 +454,22 @@ if df_raw is None or df_raw.empty:
     st.stop()
 
 # ============================================================
-# Column Mapping (MAIN PAGE, EDITED)
-# ============================================================
-st.subheader("Column mapping")
-cols = df_raw.columns
-
-with st.expander("Choose outcome / treated / post / unit / time", expanded=True):
-    outcome_col = st.selectbox("Outcome (Y) (numeric)", cols, index=default_index(cols, "y"), key="outcome_col")
-    unit_col = st.selectbox("Unit ID", cols, index=default_index(cols, "unit_id"), key="unit_col")
-    time_col = st.selectbox("Time column", cols, index=default_index(cols, "time"), key="time_col")
-    treated_col = st.selectbox("Treated indicator (0/1)", cols, index=default_index(cols, "treated"), key="treated_col")
-    post_col = st.selectbox("Post indicator (0/1)", cols, index=default_index(cols, "post"), key="post_col")
-
-# ============================================================
-# Sidebar Controls (ONLY model options, EDITED)
+# Sidebar Controls (COLUMN MAPPING BACK IN SIDEBAR)
 # ============================================================
 with st.sidebar:
     st.header("Controls")
-    st.caption("Column mapping is set in the main panel.")
+
+    st.subheader("Column mapping")
+    cols = df_raw.columns
+    outcome_col = st.selectbox("Outcome (Y) (numeric)", cols, index=default_index(cols, "y"))
+    unit_col = st.selectbox("Unit ID", cols, index=default_index(cols, "unit_id"))
+    time_col = st.selectbox("Time column", cols, index=default_index(cols, "time"))
+    treated_col = st.selectbox("Treated indicator (0/1)", cols, index=default_index(cols, "treated"))
+    post_col = st.selectbox("Post indicator (0/1)", cols, index=default_index(cols, "post"))
 
     st.divider()
+    st.subheader("Model options")
+
     num_candidates = numeric_like_columns(df_raw, min_non_na_share=0.90)
     covariate_options = [c for c in num_candidates if c not in {outcome_col, treated_col, post_col}]
     covariates = st.multiselect(
@@ -587,7 +575,7 @@ with tab_preview:
     st.dataframe(df_raw.head(25), use_container_width=True)
 
 # ============================================================
-# Main Estimation (run once; show error inside Estimate tab if it fails)
+# Main Estimation
 # ============================================================
 formula_main = build_formula(clean_covs)
 term_main = "treated:post"
@@ -729,7 +717,7 @@ with tab_plots:
     except Exception:
         st.warning("Could not generate the parallel trends plot.")
 
-    st.markdown("### 2) Pre vs post comparison: averages by group")
+    st.markdown("### 2) Pre vs post comparison: averages by group)")
     try:
         agg = (
             dfm.assign(period=dfm["post"].map({0.0: "Pre", 1.0: "Post"}))
@@ -941,6 +929,7 @@ After the policy starts, the treated group shows an average **{direction}** in t
 If shifting the cutoff earlier yields significant “effects,” it suggests your estimate may be picking up **pre-trends** rather than a causal treatment effect.
 """
         )
+
 
 
 
