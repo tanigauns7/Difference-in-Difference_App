@@ -14,7 +14,7 @@ import statsmodels.formula.api as smf
 # =========================================================
 # App Config + PURE WHITE UI
 # =========================================================
-APP_NAME = "DiD Analysis App"
+APP_NAME = "Difference in Differenece  Analysis App"
 APP_ICON = "📊"
 
 st.set_page_config(page_title=APP_NAME, page_icon=APP_ICON, layout="wide")
