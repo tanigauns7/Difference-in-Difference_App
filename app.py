@@ -179,6 +179,67 @@ def compact_reg_table(res, alpha: float):
     return out.reset_index()
 
 
+# ---------- NEW: reporting helpers ----------
+def model_fit_stats(res):
+    """Compact model-level stats for quick reporting."""
+    out = {
+        "N (obs)": int(getattr(res, "nobs", np.nan)),
+        "R-squared": float(getattr(res, "rsquared", np.nan)),
+        "Adj. R-squared": float(getattr(res, "rsquared_adj", np.nan)),
+        "AIC": float(getattr(res, "aic", np.nan)),
+        "BIC": float(getattr(res, "bic", np.nan)),
+        "DF Model": float(getattr(res, "df_model", np.nan)),
+        "DF Resid": float(getattr(res, "df_resid", np.nan)),
+    }
+    return out
+
+
+def key_term_stats(res, term: str, alpha: float, label: str, se_type: str, formula: str):
+    """One-row summary table for the main DiD interaction (or placebo interaction)."""
+    if term not in res.params.index:
+        return pd.DataFrame([{
+            "Model": label, "Term": term, "coef": np.nan, "std_err": np.nan, "t": np.nan,
+            "p_value": np.nan, f"CI_{int((1-alpha)*100)}%_low": np.nan, f"CI_{int((1-alpha)*100)}%_high": np.nan,
+            "SE type": se_type, "Formula": formula, "N (obs)": int(getattr(res, "nobs", 0))
+        }])
+
+    ci = res.conf_int(alpha=alpha).loc[term].tolist()
+    row = {
+        "Model": label,
+        "Term": term,
+        "coef": float(res.params[term]),
+        "std_err": float(res.bse[term]),
+        "t": float(res.tvalues[term]),
+        "p_value": float(res.pvalues[term]),
+        f"CI_{int((1-alpha)*100)}%_low": float(ci[0]),
+        f"CI_{int((1-alpha)*100)}%_high": float(ci[1]),
+        "SE type": se_type,
+        "Formula": formula,
+        "N (obs)": int(getattr(res, "nobs", 0)),
+    }
+    return pd.DataFrame([row])
+
+
+def significance_badge(pval: float, alpha: float):
+    """Human-friendly label for significance."""
+    if not np.isfinite(pval):
+        return "unknown"
+    return "significant" if pval < alpha else "not significant"
+
+
+def did_interpretation_points(effect: float, pval: float, alpha: float):
+    """Bullet-point interpretation for the key DiD term."""
+    sig = significance_badge(pval, alpha)
+    direction = "increases" if effect > 0 else ("decreases" if effect < 0 else "does not change")
+    return [
+        f"The estimated treatment effect (treated×post) is **{effect:.4f}**.",
+        f"This suggests the intervention **{direction}** the outcome for treated units **relative to controls** after the policy starts.",
+        f"Statistical result: **{sig}** at α = {alpha:.2f} (p = {pval:.4g}).",
+        "Causal interpretation relies on the **parallel trends** assumption (treated and control would have moved similarly without the intervention).",
+    ]
+# ---------- end NEW helpers ----------
+
+
 def did_2x2_table(df_model: pd.DataFrame):
     g = df_model.groupby(["treated", "post"])["y"].mean().reset_index()
     pivot = g.pivot(index="treated", columns="post", values="y")
@@ -349,6 +410,45 @@ def generate_synthetic(seed=7, n_units=200, n_periods=10, treat_share=0.5, effec
 st.title(APP_NAME)
 st.caption(APP_SUBTITLE)
 
+# ---------- NEW: Introduction ----------
+st.markdown(
+    """
+### 👋 Welcome — What this app does
+**DiD Insight Studio** helps you estimate a **Difference-in-Differences (DiD)** effect and run quick diagnostics:
+- Fits a DiD regression and reports the key interaction (**treated × post**)
+- Shows a **2×2 means sanity check**
+- Visualizes **parallel trends** (average outcome over time)
+- Runs **placebo tests** to detect potential **pre-trends**
+
+### What is Difference-in-Differences (DiD)?
+DiD is a causal method used when:
+- One group is **exposed** to a policy/intervention (**treated**),
+- Another similar group is **not exposed** (**control**),
+- You observe outcomes **before and after** the intervention.
+
+**Core idea:**  
+We compare how the treated group changes from **pre → post**, and subtract how the control group changes from **pre → post**.
+
+### How to use this app (workflow)
+1) Upload your CSV (or use the synthetic data)  
+2) Choose columns: outcome, unit id, time, treated, post  
+3) Read the **treated×post** effect (main DiD)  
+4) Check diagnostics (plots + placebo tests) before making causal claims
+"""
+)
+
+with st.expander("✅ Dataset requirements (recommended format)", expanded=False):
+    st.write(
+        "- **One row per unit-time observation** (panel / longitudinal data)\n"
+        "- `treated` is a group indicator (1 treated units, 0 control units)\n"
+        "- `post` indicates post-treatment periods (1 after treatment begins, 0 before)\n"
+        "- Outcome `Y` should be numeric (or convertible to numeric)\n"
+        "- Covariates optional; numeric recommended\n"
+    )
+
+st.divider()
+# ---------- end NEW intro ----------
+
 with st.expander("Install / Run Instructions", expanded=False):
     st.code(
         "pip install streamlit pandas numpy statsmodels matplotlib\n"
@@ -472,6 +572,26 @@ kpi4.metric(f"{int((1-alpha)*100)}% CI", f"[{ciL_main:.4f}, {ciH_main:.4f}]")
 
 st.caption(f"SE type: {se_type_main} | Model: {formula_main}")
 st.markdown(render_interpretation(coef_main, p_main, alpha, label="Main DiD"))
+
+# ---------- NEW: Key stats table + bullets ----------
+st.write("**Key statistics (Main DiD interaction term)**")
+main_key = key_term_stats(
+    res=res_main,
+    term=term_main,
+    alpha=alpha,
+    label="Main DiD",
+    se_type=se_type_main,
+    formula=formula_main,
+)
+st.dataframe(main_key, use_container_width=True)
+
+st.write("**Interpretation (Main DiD) — points to include in your report**")
+for pt in did_interpretation_points(coef_main, p_main, alpha):
+    st.markdown(f"- {pt}")
+
+with st.expander("Model fit statistics (Main DiD)", expanded=False):
+    st.json(model_fit_stats(res_main))
+# ---------- end NEW ----------
 
 with st.expander("Compact regression table (main model)", expanded=False):
     st.dataframe(compact_reg_table(res_main, alpha=alpha), use_container_width=True)
@@ -603,6 +723,34 @@ st.divider()
 # -----------------------------
 st.subheader("5) Diagnostics (Placebo / Pre-trend checks)")
 
+# ---------- NEW: Diagnostics checklist ----------
+st.markdown(
+    """
+### ✅ Diagnostics checklist (what to check and why it matters)
+
+**Why diagnostics are important:**  
+A DiD estimate can look “significant” even when it’s **not causal**, especially if treated and control groups were
+already trending differently before the intervention.
+
+**What to check in this app:**
+1) **2×2 cell counts (treated/control × pre/post)**  
+   - You need all 4 cells. Missing cells can make DiD impossible or misleading.
+
+2) **Parallel trends plot (Average Y over time)**  
+   - Focus on the **pre-period**: treated and control should move roughly in parallel before the policy.
+
+3) **Placebo A (shift the policy earlier)**  
+   - A significant placebo suggests **pre-trends**, anticipation effects, or a weak control group.
+
+4) **Placebo B (pre-only fake cutoff)**  
+   - A significant placebo suggests treated and control were diverging even within pre.
+
+5) **Sensitivity thinking (outside this app, but important)**  
+   - Try adding/removing covariates, checking alternative control groups, or changing the time window.
+"""
+)
+# ---------- end NEW checklist ----------
+
 st.write("### Placebo A — Fake policy date (shift post earlier)")
 times = sorted_unique_times(df_model)
 
@@ -669,11 +817,27 @@ if placeboA.ok:
     a3.metric("p-value", f"{placeboA.pval:.4g}")
     a4.metric(f"{int((1-alpha)*100)}% CI", f"[{placeboA.ci_low:.4f}, {placeboA.ci_high:.4f}]")
     st.caption(f"SE type: {placeboA.se_type} | Model: {placeboA.formula} | N={placeboA.n_obs}")
-    st.markdown(
-        "**Interpretation (Placebo A):** This tests for **pre-trends** by pretending the policy started earlier. "
-        "If parallel trends holds, the placebo interaction should be close to 0 and typically not significant. "
-        + (f"Here it is {'significant' if placeboA.pval < alpha else 'not significant'} at α={alpha:.2f}.")
+
+    # ---------- NEW: Placebo A key table ----------
+    st.write("**Key statistics (Placebo A interaction term)**")
+    placeboA_key = key_term_stats(
+        res=placeboA.res,
+        term=placeboA.term,
+        alpha=alpha,
+        label="Placebo A (shifted cutoff)",
+        se_type=placeboA.se_type,
+        formula=placeboA.formula,
     )
+    st.dataframe(placeboA_key, use_container_width=True)
+
+    st.write("**How to interpret Placebo A**")
+    st.markdown(
+        "- This pretends the policy started **earlier** than it really did.\n"
+        "- If **parallel trends** holds, the placebo interaction should be close to **0** and usually **not significant**.\n"
+        f"- Here it is **{significance_badge(placeboA.pval, alpha)}** at α={alpha:.2f}."
+    )
+    # ---------- end NEW ----------
+
     with st.expander("Compact regression table (Placebo A)", expanded=False):
         st.dataframe(compact_reg_table(placeboA.res, alpha=alpha), use_container_width=True)
 else:
@@ -752,11 +916,27 @@ if placeboB.ok:
     b3.metric("p-value", f"{placeboB.pval:.4g}")
     b4.metric(f"{int((1-alpha)*100)}% CI", f"[{placeboB.ci_low:.4f}, {placeboB.ci_high:.4f}]")
     st.caption(f"SE type: {placeboB.se_type} | Model: {placeboB.formula} | N={placeboB.n_obs}")
-    st.markdown(
-        "**Interpretation (Placebo B):** Uses **only pre-treatment data** and inserts a fake cutoff. "
-        "If treated and control already diverge within the pre-period, this can show up as a significant placebo effect. "
-        + (f"Here it is {'significant' if placeboB.pval < alpha else 'not significant'} at α={alpha:.2f}.")
+
+    # ---------- NEW: Placebo B key table ----------
+    st.write("**Key statistics (Placebo B interaction term)**")
+    placeboB_key = key_term_stats(
+        res=placeboB.res,
+        term=placeboB.term,
+        alpha=alpha,
+        label="Placebo B (pre-only fake cutoff)",
+        se_type=placeboB.se_type,
+        formula=placeboB.formula,
     )
+    st.dataframe(placeboB_key, use_container_width=True)
+
+    st.write("**How to interpret Placebo B**")
+    st.markdown(
+        "- This uses **only pre-treatment data** and inserts a fake cutoff inside the pre period.\n"
+        "- If treated vs control were already diverging **before** the intervention, this placebo may look significant.\n"
+        f"- Here it is **{significance_badge(placeboB.pval, alpha)}** at α={alpha:.2f}."
+    )
+    # ---------- end NEW ----------
+
     with st.expander("Compact regression table (Placebo B)", expanded=False):
         st.dataframe(compact_reg_table(placeboB.res, alpha=alpha), use_container_width=True)
 else:
@@ -814,21 +994,40 @@ st.subheader("7) Plain-English Summary")
 
 st.markdown(
     f"""
-**What the main DiD estimate means**  
-- The DiD interaction term (**treated×post**) compares how the treated group changed from pre→post **relative** to how the control group changed from pre→post.  
-- If the **parallel trends** assumption is reasonable, this is interpreted as the causal effect of the intervention on the treated group.
+### What the main DiD estimate means (in simple words)
+- The **treated×post** term estimates:  
+  **(Treated post − Treated pre) − (Control post − Control pre)**
+- It answers: *“Did the treated group change more (or less) than the control group after the intervention?”*
+- If **parallel trends** is plausible, we interpret this as the **causal effect on treated units**.
 
-**How to read the placebo tests**  
-- **Placebo A (shift post earlier):** If you see a big / significant placebo effect **before** the real intervention, that can be a warning sign of pre-trends.  
-- **Placebo B (pre-only fake cutoff):** If treated and control already diverge within the pre period, the placebo interaction may be significant—again suggesting possible pre-trends.
+### How to interpret the key statistics
+- **Coefficient (coef):** size and direction of the estimated effect.
+- **Standard error (SE):** uncertainty around the coefficient.
+- **t-statistic:** coef ÷ SE (signal-to-noise).
+- **p-value:** how surprising the estimate is if the true effect were 0.
+- **Confidence interval (CI):** likely range for the true effect (e.g., 95% CI when α=0.05).
 
-**Quick rule of thumb**  
-- Main DiD significant + placebo effects near 0 (not significant) ⇒ more consistent with parallel trends.  
-- Placebo significant ⇒ investigate pre-trends, add controls, consider unit/time fixed effects (not implemented here), or reconsider identification.
+### Why diagnostics matter (most important part!)
+Even if your main DiD is significant, it may not be causal if:
+- treated and control were already moving differently **before** the policy,
+- the “control” group isn’t a good comparison,
+- or there’s anticipation / selection issues.
+
+### How to read the placebo tests in this app
+- **Placebo A (shift post earlier):**  
+  If it becomes significant *before the real policy date*, that’s a warning sign of **pre-trends**.
+- **Placebo B (pre-only fake cutoff):**  
+  If treated vs control diverge within the pre period, you might be violating parallel trends.
+
+### Rule of thumb (quick decision)
+- ✅ Main DiD looks meaningful **and** placebos are near 0 / not significant  
+  → more consistent with a credible DiD design.
+- ⚠️ Placebos significant or pre-trends visible  
+  → reconsider identification (better controls, narrower window, or add fixed effects / event study).
 """
 )
 
-with st.expander("Dataset requirements", expanded=False):
+with st.expander("Dataset requirements (quick list)", expanded=False):
     st.write(
         "- One row per unit-time observation.\n"
         "- `treated` is a group indicator (1 for treated units, 0 for controls).\n"
@@ -836,6 +1035,7 @@ with st.expander("Dataset requirements", expanded=False):
         "- Outcome Y should be numeric (or convertible to numeric).\n"
         "- Covariates optional; numeric recommended.\n"
     )
+
 
 
 
