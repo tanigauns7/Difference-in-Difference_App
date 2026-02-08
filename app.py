@@ -9,137 +9,197 @@ from dataclasses import dataclass
 # =============================
 # App Identity
 # =============================
-APP_NAME = "DiD Insight Studio"
+APP_NAME = "Difference-in-Differences Studio"
 APP_SUBTITLE = "Difference-in-Differences estimator with diagnostics, plots, and placebo checks."
 
 st.set_page_config(page_title=APP_NAME, page_icon="📊", layout="wide")
 
 # =============================
-# Professional Dark Theme Styling
+# Sidebar: Display controls (READABILITY)
+# =============================
+with st.sidebar:
+    st.header("Display (Readability)")
+    font_scale = st.slider("Font size", 0.95, 1.50, 1.20, 0.05)
+    line_height = st.slider("Line spacing", 1.20, 1.90, 1.55, 0.05)
+    page_width = st.slider("Content width (px)", 900, 1600, 1280, 20)
+    contrast = st.slider("Contrast", 1.0, 1.4, 1.20, 0.05)
+    st.divider()
+
+# =============================
+# High-contrast Dark Theme Styling
 # =============================
 st.markdown(
-    """
+    f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
 
-/* App base */
-.stApp {
-  background:
-    radial-gradient(900px 600px at 20% 10%, rgba(124, 58, 237, 0.18), rgba(0,0,0,0) 60%),
-    radial-gradient(900px 600px at 85% 20%, rgba(16, 185, 129, 0.12), rgba(0,0,0,0) 60%),
-    linear-gradient(180deg, #070B11 0%, #0B0F14 40%, #090D13 100%);
-  color: #E5E7EB;
-  font-family: "Plus Jakarta Sans", system-ui, -apple-system, Segoe UI, Roboto, Arial;
-}
+:root {{
+  --font-scale: {font_scale};
+  --line-height: {line_height};
+  --max-width: {page_width}px;
+  --contrast: {contrast};
+}}
 
-/* Layout */
-.block-container { padding-top: 1.1rem; padding-bottom: 2rem; max-width: 1180px; }
+/* App base */
+.stApp {{
+  filter: contrast(var(--contrast));
+  background:
+    radial-gradient(900px 600px at 20% 10%, rgba(124, 58, 237, 0.22), rgba(0,0,0,0) 60%),
+    radial-gradient(900px 600px at 85% 20%, rgba(16, 185, 129, 0.18), rgba(0,0,0,0) 60%),
+    linear-gradient(180deg, #060A10 0%, #0A0F16 55%, #070B12 100%);
+  color: #F3F4F6;
+  font-family: "Plus Jakarta Sans", system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  font-size: calc(16px * var(--font-scale));
+  line-height: var(--line-height);
+}}
+
+/* Layout width */
+.block-container {{
+  padding-top: 1.0rem;
+  padding-bottom: 2.2rem;
+  max-width: var(--max-width);
+}}
 
 /* Hide Streamlit default header/footer */
-header { visibility: hidden; }
-footer { visibility: hidden; }
+header {{ visibility: hidden; }}
+footer {{ visibility: hidden; }}
 
-/* Headings */
-h1, h2, h3, h4 {
+/* Headings: bigger + brighter */
+h1, h2, h3, h4 {{
   letter-spacing: -0.01em !important;
-}
+  color: #F9FAFB !important;
+}}
+h1 {{ font-size: calc(2.2rem * var(--font-scale)) !important; }}
+h2 {{ font-size: calc(1.6rem * var(--font-scale)) !important; }}
+h3 {{ font-size: calc(1.25rem * var(--font-scale)) !important; }}
 
-/* Sidebar polish */
-section[data-testid="stSidebar"] {
-  background: linear-gradient(180deg, rgba(17,24,39,0.92), rgba(9,13,19,0.92));
-  border-right: 1px solid rgba(255,255,255,0.06);
-}
-section[data-testid="stSidebar"] * { color: #E5E7EB !important; }
+/* Sidebar */
+section[data-testid="stSidebar"] {{
+  background: linear-gradient(180deg, rgba(17,24,39,0.96), rgba(9,13,19,0.96));
+  border-right: 1px solid rgba(255,255,255,0.10);
+}}
+section[data-testid="stSidebar"] * {{
+  color: #F3F4F6 !important;
+}}
 
-/* Buttons / inputs */
-.stButton>button {
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.10);
-  background: rgba(17,24,39,0.7);
-}
-.stButton>button:hover {
+/* Inputs: improve contrast */
+div[data-baseweb="input"] input,
+div[data-baseweb="select"] > div {{
+  background: rgba(17, 24, 39, 0.88) !important;
+  border: 1px solid rgba(255,255,255,0.14) !important;
+  color: #F9FAFB !important;
+  border-radius: 14px !important;
+}}
+div[data-baseweb="base-input"] {{
+  border-radius: 14px !important;
+}}
+
+/* File uploader: brighter */
+section[data-testid="stFileUploaderDropzone"] {{
+  background: rgba(17, 24, 39, 0.70) !important;
+  border: 1px dashed rgba(255,255,255,0.22) !important;
+  border-radius: 18px !important;
+}}
+section[data-testid="stFileUploaderDropzone"] * {{
+  color: #F9FAFB !important;
+}}
+
+/* Buttons */
+.stButton>button {{
+  border-radius: 14px;
   border: 1px solid rgba(255,255,255,0.18);
-  background: rgba(17,24,39,0.9);
-}
+  background: rgba(17,24,39,0.88);
+  padding: 0.60rem 0.95rem;
+  color: #F9FAFB;
+  font-weight: 650;
+}}
+.stButton>button:hover {{
+  border: 1px solid rgba(255,255,255,0.28);
+  background: rgba(17,24,39,0.98);
+}}
 
-/* Metric cards */
-div[data-testid="stMetric"] {
-  background: rgba(17, 24, 39, 0.72);
-  border: 1px solid rgba(255,255,255,0.08);
-  padding: 14px 16px;
-  border-radius: 16px;
-  backdrop-filter: blur(6px);
-}
-div[data-testid="stMetric"] label {
-  opacity: 0.85;
-}
+/* KPI metric cards: make numbers POP */
+div[data-testid="stMetric"] {{
+  background: rgba(17, 24, 39, 0.92);
+  border: 1px solid rgba(255,255,255,0.14);
+  padding: 18px 16px;
+  border-radius: 18px;
+}}
+div[data-testid="stMetric"] label {{
+  opacity: 0.95 !important;
+  color: rgba(249,250,251,0.92) !important;
+  font-size: calc(0.98rem * var(--font-scale)) !important;
+}}
+div[data-testid="stMetricValue"] {{
+  color: #FFFFFF !important;
+  font-weight: 850 !important;
+  font-size: calc(1.70rem * var(--font-scale)) !important;
+}}
+div[data-testid="stMetricDelta"] {{
+  color: rgba(167,243,208,0.95) !important;
+}}
 
-/* Dataframe cards */
-div[data-testid="stDataFrame"] {
-  border-radius: 16px;
+/* Dataframes: brighter borders */
+div[data-testid="stDataFrame"] {{
+  border-radius: 18px;
   overflow: hidden;
-  border: 1px solid rgba(255,255,255,0.08);
-  background: rgba(17,24,39,0.45);
-  backdrop-filter: blur(6px);
-}
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(17,24,39,0.78);
+}}
 
 /* Code blocks */
-pre, code {
+pre, code {{
   font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas !important;
-}
-pre { border-radius: 14px !important; border: 1px solid rgba(255,255,255,0.08) !important; }
+  font-size: calc(0.95rem * var(--font-scale)) !important;
+}}
+pre {{
+  border-radius: 14px !important;
+  border: 1px solid rgba(255,255,255,0.12) !important;
+  background: rgba(17,24,39,0.82) !important;
+}}
 
 /* Divider */
-hr { border-top: 1px solid rgba(255,255,255,0.10); }
+hr {{ border-top: 1px solid rgba(255,255,255,0.14); }}
 
-/* Hero title styling */
-.hero-wrap {
+/* Hero */
+.hero-wrap {{
   padding: 18px 18px 14px 18px;
   border-radius: 18px;
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.14);
   background:
-    radial-gradient(900px 200px at 30% 0%, rgba(124,58,237,0.18), rgba(0,0,0,0) 60%),
-    radial-gradient(900px 200px at 85% 0%, rgba(16,185,129,0.12), rgba(0,0,0,0) 60%),
-    rgba(17,24,39,0.55);
-  backdrop-filter: blur(8px);
-}
-
-.hero-title {
-  font-size: 46px;
-  font-weight: 800;
+    radial-gradient(900px 240px at 30% 0%, rgba(124,58,237,0.22), rgba(0,0,0,0) 60%),
+    radial-gradient(900px 240px at 85% 0%, rgba(16,185,129,0.18), rgba(0,0,0,0) 60%),
+    rgba(17,24,39,0.78);
+}}
+.hero-title {{
+  font-size: calc(44px * var(--font-scale));
+  font-weight: 900;
   line-height: 1.05;
   margin: 0;
   letter-spacing: -0.03em;
-  background: linear-gradient(90deg, #E5E7EB 0%, #C7D2FE 35%, #A7F3D0 75%, #E5E7EB 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
-.hero-subtitle {
+  color: #F9FAFB;
+}}
+.hero-subtitle {{
   margin-top: 10px;
-  font-size: 14.5px;
-  color: rgba(229,231,235,0.85);
-}
-
-.hero-badges {
+  font-size: calc(15px * var(--font-scale));
+  color: rgba(243,244,246,0.90);
+}}
+.hero-badges {{
   margin-top: 12px;
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
-}
-.badge {
-  font-size: 12.5px;
-  padding: 6px 10px;
+}}
+.badge {{
+  font-size: calc(12.8px * var(--font-scale));
+  padding: 7px 11px;
   border-radius: 999px;
-  border: 1px solid rgba(255,255,255,0.10);
-  background: rgba(11,15,20,0.35);
-  color: rgba(229,231,235,0.92);
-}
-.badge b { font-weight: 700; color: rgba(255,255,255,0.92); }
-
-/* Small helper */
-.muted { color: rgba(229,231,235,0.75); }
+  border: 1px solid rgba(255,255,255,0.16);
+  background: rgba(11,15,20,0.45);
+  color: rgba(249,250,251,0.95);
+}}
+.badge b {{ font-weight: 800; }}
+.small-muted {{ color: rgba(243,244,246,0.82); }}
 </style>
 """,
     unsafe_allow_html=True,
@@ -261,7 +321,6 @@ def compact_reg_table(res, alpha: float):
     return out.reset_index()
 
 
-# ---------- Reporting helpers ----------
 def model_fit_stats(res):
     return {
         "N (obs)": int(getattr(res, "nobs", np.nan)),
@@ -327,7 +386,7 @@ def did_interpretation_points(effect: float, pval: float, alpha: float):
         f"The estimated treatment effect (treated×post) is **{effect:.4f}**.",
         f"This suggests the intervention **{direction}** the outcome for treated units **relative to controls** after the policy starts.",
         f"Statistical result: **{sig}** at α = {alpha:.2f} (p = {pval:.4g}).",
-        "Causal interpretation relies on the **parallel trends** assumption (treated and control would have moved similarly without the intervention).",
+        "Causal interpretation relies on the **parallel trends** assumption.",
     ]
 
 
@@ -380,9 +439,8 @@ def sorted_unique_times(df_model: pd.DataFrame):
 def render_interpretation(effect, pval, alpha, label="DiD"):
     sig = "statistically significant" if (pval < alpha) else "not statistically significant"
     return (
-        f"**Interpretation ({label}):** The interaction term estimates the **treatment effect on the treated** "
-        f"under the parallel trends assumption. Here, the estimated effect is **{effect:.4f}** and it is **{sig}** "
-        f"at significance level α = {alpha:.2f} (p = {pval:.4g})."
+        f"**Interpretation ({label}):** The interaction term estimates the **treatment effect on the treated**. "
+        f"Estimated effect = **{effect:.4f}** and it is **{sig}** at α = {alpha:.2f} (p = {pval:.4g})."
     )
 
 
@@ -397,7 +455,6 @@ def run_placebo_shift_sweep(df_model, cov_cols, cluster, alpha, times, real_cuto
     rows = []
     cutoff_idx = times.index(real_cutoff_time)
     max_k = max(1, cutoff_idx)
-
     cov_terms = (" + " + " + ".join(cov_cols)) if cov_cols else ""
 
     for K in range(1, int(max_k) + 1):
@@ -405,7 +462,7 @@ def run_placebo_shift_sweep(df_model, cov_cols, cluster, alpha, times, real_cuto
         dfA = df_model.copy()
         dfA["placebo_post"] = (dfA["time"] >= placebo_cutoff_time).astype(int).astype(float)
 
-        ok_cells, _counts = has_all_cells(dfA, "treated", "placebo_post")
+        ok_cells, _ = has_all_cells(dfA, "treated", "placebo_post")
         if not ok_cells:
             continue
 
@@ -492,7 +549,7 @@ def generate_synthetic(seed=7, n_units=200, n_periods=10, treat_share=0.5, effec
 
 
 # =============================
-# UI
+# UI Header
 # =============================
 st.markdown(
     f"""
@@ -509,65 +566,21 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-st.markdown(
-    """
-### 👋 Welcome — What this app does
-**DiD Insight Studio** helps you estimate a **Difference-in-Differences (DiD)** effect and run quick diagnostics:
-- Fits a DiD regression and reports the key interaction (**treated × post**)
-- Shows a **2×2 means sanity check**
-- Visualizes **parallel trends** (average outcome over time)
-- Runs placebo checks to detect potential pre-trends
-
-### What is Difference-in-Differences (DiD)?
-DiD is a causal method used when:
-- One group is exposed to a policy/intervention (**treated**)
-- Another similar group is not exposed (**control**)
-- You observe outcomes **before and after** the intervention
-
-**Core idea:** Compare how treated changes **pre → post**, and subtract how control changes **pre → post**.
+with st.expander("Quick help: what you need in the dataset", expanded=False):
+    st.markdown(
+        """
+- One row per **unit × time**
+- `treated` = 1 for treated group, 0 for control
+- `post` = 1 for after intervention begins, 0 for before
+- Outcome **Y** numeric
+- Covariates optional (numeric recommended)
 """
-)
-
-st.markdown(
-    """
-<div style="
-  padding: 14px 16px;
-  border-radius: 16px;
-  border: 1px solid rgba(255,255,255,0.10);
-  background: rgba(17,24,39,0.55);
-  backdrop-filter: blur(6px);
-  margin-top: 10px;
-  margin-bottom: 10px;
-">
-  <div style="font-size: 16px; font-weight: 800; margin-bottom: 8px;">✅ Dataset requirements (read before uploading)</div>
-  <ul style="margin: 0 0 0 18px; color: rgba(229,231,235,0.92); line-height: 1.55;">
-    <li><b>One row per unit-time observation.</b></li>
-    <li><code>treated</code> is a group indicator (1 treated, 0 control).</li>
-    <li><code>post</code> indicates post-treatment periods (1 after treatment begins, 0 before).</li>
-    <li>Outcome <code>Y</code> should be numeric (or convertible to numeric).</li>
-    <li>Covariates optional; numeric recommended.</li>
-  </ul>
-</div>
-""",
-    unsafe_allow_html=True,
-)
-
-
-with st.expander("Install / Run Instructions", expanded=False):
-    st.code(
-        "pip install streamlit pandas numpy statsmodels matplotlib\n"
-        "streamlit run app.py\n\n"
-        "# Optional (recommended): create .streamlit/config.toml for theme\n"
-        "# [theme]\n"
-        "# base='dark'\n"
-        "# backgroundColor='#0B0F14'\n"
-        "# secondaryBackgroundColor='#111827'\n"
-        "# textColor='#E5E7EB'\n",
-        language="bash",
     )
 
-st.write("Upload a CSV or use the built-in synthetic dataset. Then select columns and run DiD + placebo diagnostics.")
-
+# =============================
+# Data upload
+# =============================
+st.subheader("Upload data")
 uploaded = st.file_uploader("Upload CSV", type=["csv"])
 use_synth = st.checkbox("Use synthetic dataset (if no file uploaded)", value=(uploaded is None))
 
@@ -590,7 +603,9 @@ if df_raw.empty:
 
 cols = df_raw.columns.tolist()
 
-# Sidebar controls
+# =============================
+# Sidebar model controls
+# =============================
 with st.sidebar:
     st.header("Model Setup")
     outcome_col = st.selectbox("Outcome (Y)", options=cols, index=cols.index("y") if "y" in cols else 0)
@@ -610,14 +625,9 @@ with st.sidebar:
     cluster = st.checkbox("Cluster SE by unit", value=True)
     alpha = st.selectbox("Significance level α", options=[0.10, 0.05, 0.01], index=1)
 
-st.subheader("1) Data Preview")
-st.dataframe(df_raw.head(20), use_container_width=True)
-
-st.divider()
-
-# -----------------------------
+# =============================
 # Build model df and validate
-# -----------------------------
+# =============================
 df_model, dropped = make_design_df(df_raw, outcome_col, unit_col, time_col, treated_col, post_col, covariates)
 
 warn_msgs = []
@@ -648,18 +658,16 @@ if len(df_model) < 30:
 cell_counts, missing_cells = check_2x2_cells(df_model)
 if missing_cells:
     warn_msgs.append(
-        f"Real DiD 2x2 cells missing: {sorted(list(missing_cells))}. "
+        f"Real DiD 2×2 cells missing: {sorted(list(missing_cells))}. "
         "You may not have both treated/control and pre/post observations."
     )
 
 if warn_msgs:
     st.warning("Validation / Warnings:\n- " + "\n- ".join(warn_msgs))
 
-# -----------------------------
-# Main Model
-# -----------------------------
-st.subheader("2) Main Estimate (DiD)")
-
+# =============================
+# Fit main model
+# =============================
 try:
     res_main, se_type_main, term_main, coef_main, se_main, p_main, ciL_main, ciH_main, formula_main = fit_did_model(
         df_model, cov_cols, cluster=cluster, alpha=alpha
@@ -668,16 +676,6 @@ except Exception as e:
     st.error(f"Model failed to run. Error: {e}")
     st.stop()
 
-kpi1, kpi2, kpi3, kpi4 = st.columns(4)
-kpi1.metric("DiD (treated×post) coef", f"{coef_main:.4f}")
-kpi2.metric("Std. Error", f"{se_main:.4f}")
-kpi3.metric("p-value", f"{p_main:.4g}")
-kpi4.metric(f"{int((1-alpha)*100)}% CI", f"[{ciL_main:.4f}, {ciH_main:.4f}]")
-
-st.caption(f"SE type: {se_type_main} | Model: {formula_main}")
-st.markdown(render_interpretation(coef_main, p_main, alpha, label="Main DiD"))
-
-st.write("**Key statistics (Main DiD interaction term)**")
 main_key = key_term_stats(
     res=res_main,
     term=term_main,
@@ -686,423 +684,389 @@ main_key = key_term_stats(
     se_type=se_type_main,
     formula=formula_main,
 )
-st.dataframe(main_key, use_container_width=True)
 
-st.write("**Interpretation (Main DiD) — points to include in your report**")
-for pt in did_interpretation_points(coef_main, p_main, alpha):
-    st.markdown(f"- {pt}")
-
-with st.expander("Model fit statistics (Main DiD)", expanded=False):
-    st.json(model_fit_stats(res_main))
-
-with st.expander("Compact regression table (main model)", expanded=False):
-    st.dataframe(compact_reg_table(res_main, alpha=alpha), use_container_width=True)
-
-st.divider()
-
-# -----------------------------
-# Manual 2x2 DiD
-# -----------------------------
-st.subheader("3) Sanity Check (2×2 Means)")
-
-pivot, did_val, did_ok = did_2x2_table(df_model)
-left, right = st.columns([1.2, 1])
-with left:
-    st.write("**2×2 mean outcome table**")
-    st.dataframe(pivot, use_container_width=True)
-with right:
-    st.write("**Manual DiD**")
-    if did_ok and np.isfinite(did_val):
-        st.metric("DiD from means", f"{did_val:.4f}")
-        st.write(
-            "This equals: (Treated Post − Treated Pre) − (Control Post − Control Pre). "
-            "It should be close to the regression interaction coefficient when the model has no extra covariates "
-            "and the sample is balanced."
-        )
-    else:
-        st.error("Could not compute manual DiD because one or more 2×2 cells are missing.")
-
-with st.expander("2×2 cell counts (treated/control × pre/post)", expanded=False):
-    st.dataframe(cell_counts, use_container_width=True)
-
-st.divider()
-
-# -----------------------------
-# Plots
-# -----------------------------
-st.subheader("4) Visuals")
-
-post_start = infer_post_start_time(df_model)
-if post_start is None:
-    st.warning("Cannot infer treatment cutoff because 'post' has no 1s.")
-else:
-    st.caption(f"Inferred treatment cutoff (first post period): {post_start}")
-
-plot1, plot2 = st.columns(2)
-
-with plot1:
-    st.write("**Parallel Trends (Average Y over time)**")
-    try:
-        g = df_model.groupby(["time", "treated"])["y"].mean().reset_index().sort_values("time")
-        pt = g.pivot(index="time", columns="treated", values="y").sort_index()
-
-        fig = plt.figure()
-        ax = fig.add_subplot(111)
-
-        if 0.0 in pt.columns:
-            ax.plot(pt.index, pt[0.0].values, marker="o", label="Control (treated=0)")
-        if 1.0 in pt.columns:
-            ax.plot(pt.index, pt[1.0].values, marker="o", label="Treated (treated=1)")
-
-        if post_start is not None:
-            ax.axvline(post_start, linestyle="--", linewidth=1)
-
-        ax.set_xlabel("Time")
-        ax.set_ylabel("Average outcome (Y)")
-        ax.legend()
-        ax.set_title("Average Y by group over time")
-        st.pyplot(fig, clear_figure=True)
-        plt.close(fig)
-    except Exception as e:
-        st.error(f"Parallel trends plot failed: {e}")
-
-with plot2:
-    st.write("**Outcome Distribution**")
-    dist_mode = st.selectbox(
-        "Compare distributions",
-        options=[
-            "Treated vs Control (all periods)",
-            "Pre vs Post (all units)",
-            "4 groups (treated/control × pre/post)",
-        ],
-        index=0,
-    )
-
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-
-    y = df_model["y"].dropna()
-    if y.empty:
-        st.error("No valid outcome data to plot.")
-    else:
-        if dist_mode == "Treated vs Control (all periods)":
-            y0 = df_model.loc[df_model["treated"] == 0, "y"].dropna()
-            y1 = df_model.loc[df_model["treated"] == 1, "y"].dropna()
-            ax.hist(y0.values, bins=30, alpha=0.6, label="Control (treated=0)")
-            ax.hist(y1.values, bins=30, alpha=0.6, label="Treated (treated=1)")
-            ax.set_title("Outcome distribution: Treated vs Control")
-
-        elif dist_mode == "Pre vs Post (all units)":
-            ypre = df_model.loc[df_model["post"] == 0, "y"].dropna()
-            ypost = df_model.loc[df_model["post"] == 1, "y"].dropna()
-            ax.hist(ypre.values, bins=30, alpha=0.6, label="Pre (post=0)")
-            ax.hist(ypost.values, bins=30, alpha=0.6, label="Post (post=1)")
-            ax.set_title("Outcome distribution: Pre vs Post")
-
-        else:
-            labels = [
-                ("Control-Pre", (df_model["treated"] == 0) & (df_model["post"] == 0)),
-                ("Control-Post", (df_model["treated"] == 0) & (df_model["post"] == 1)),
-                ("Treated-Pre", (df_model["treated"] == 1) & (df_model["post"] == 0)),
-                ("Treated-Post", (df_model["treated"] == 1) & (df_model["post"] == 1)),
-            ]
-            for lab, mask in labels:
-                yy = df_model.loc[mask, "y"].dropna()
-                if len(yy) > 0:
-                    ax.hist(yy.values, bins=30, alpha=0.5, label=lab)
-            ax.set_title("Outcome distribution: 4 groups")
-
-        ax.set_xlabel("Outcome (Y)")
-        ax.set_ylabel("Count")
-        ax.legend()
-        st.pyplot(fig, clear_figure=True)
-        plt.close(fig)
-
-st.divider()
-
-# -----------------------------
-# Placebo Tests + Visual
-# -----------------------------
-st.subheader("5) Diagnostics (Placebo / Pre-trend checks)")
-
-st.markdown(
-    """
-### ✅ Diagnostics checklist (what to check and why it matters)
-**Why diagnostics are important:** A DiD estimate can look “significant” even when it’s **not causal** if treated and control were already trending differently.
-
-**What to check in this app:**
-1) **2×2 cells exist** (treated/control × pre/post)  
-2) **Parallel trends plot** looks similar in the pre period  
-3) **Placebo A** (shift policy earlier) is near 0 / not significant  
-4) **Placebo B** (pre-only fake cutoff) is near 0 / not significant  
-"""
+# =============================
+# Tabs (clean layout)
+# =============================
+tab1, tab2, tab3, tab4, tab5 = st.tabs(
+    ["📄 Preview", "📌 Estimate", "📈 Plots", "🧪 Diagnostics", "📝 Summary"]
 )
 
-st.write("### Placebo A — Fake policy date (shift post earlier)")
-times = sorted_unique_times(df_model)
+with tab1:
+    st.subheader("Data Preview")
+    st.dataframe(df_raw.head(25), use_container_width=True)
 
-if post_start is None or len(times) < 3:
-    st.warning("Placebo A unavailable: cannot infer post start time or too few time periods.")
-    placeboA = PlaceboResult(ok=False, message="Insufficient time periods or no post==1.")
-else:
-    cutoff_idx = times.index(post_start)
-    max_k = max(1, cutoff_idx)
+    with st.expander("Install / Run instructions", expanded=False):
+        st.code(
+            "pip install streamlit pandas numpy statsmodels matplotlib\n"
+            "streamlit run app.py\n",
+            language="bash",
+        )
 
-    K = st.slider("Shift earlier by K time steps", min_value=1, max_value=int(max_k), value=1, step=1)
-    placebo_cutoff_time = times[max(0, cutoff_idx - K)]
+with tab2:
+    st.subheader("Main Estimate (DiD)")
 
-    dfA = df_model.copy()
-    dfA["placebo_post"] = (dfA["time"] >= placebo_cutoff_time).astype(int).astype(float)
+    kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+    kpi1.metric("DiD (treated×post)", f"{coef_main:.4f}")
+    kpi2.metric("Std. Error", f"{se_main:.4f}")
+    kpi3.metric("p-value", f"{p_main:.4g}")
+    kpi4.metric(f"{int((1-alpha)*100)}% CI", f"[{ciL_main:.4f}, {ciH_main:.4f}]")
 
-    okA, _countsA = has_all_cells(dfA, "treated", "placebo_post")
+    st.caption(f"SE type: {se_type_main} | Model: {formula_main}")
+    st.info(render_interpretation(coef_main, p_main, alpha, label="Main DiD"))
 
-    st.caption(f"Real cutoff: {post_start} | Placebo cutoff (K={K}): {placebo_cutoff_time}")
+    st.write("Key interaction stats")
+    st.dataframe(main_key, use_container_width=True)
 
-    if not okA:
-        st.warning("Placebo A has missing cells (treated/control × placebo pre/post).")
-        placeboA = PlaceboResult(ok=False, message="Missing placebo A 2x2 cells.")
+    with st.expander("Interpretation bullets (copy into report)", expanded=False):
+        for pt in did_interpretation_points(coef_main, p_main, alpha):
+            st.markdown(f"- {pt}")
+
+    with st.expander("Full regression table", expanded=False):
+        st.dataframe(compact_reg_table(res_main, alpha=alpha), use_container_width=True)
+
+    with st.expander("Model fit stats", expanded=False):
+        st.json(model_fit_stats(res_main))
+
+with tab3:
+    st.subheader("Visuals")
+
+    post_start = infer_post_start_time(df_model)
+    if post_start is None:
+        st.warning("Cannot infer treatment cutoff because 'post' has no 1s.")
     else:
+        st.caption(f"Treatment cutoff (first post period): {post_start}")
+
+    plot1, plot2 = st.columns(2)
+
+    with plot1:
+        st.write("Parallel Trends (Average Y over time)")
         try:
-            cov_terms = (" + " + " + ".join(cov_cols)) if cov_cols else ""
-            formulaA = f"y ~ treated + placebo_post + treated:placebo_post{cov_terms}"
-            modelA = smf.ols(formula=formulaA, data=dfA)
+            g = df_model.groupby(["time", "treated"])["y"].mean().reset_index().sort_values("time")
+            pt = g.pivot(index="time", columns="treated", values="y").sort_index()
 
-            if cluster:
-                resA = modelA.fit(cov_type="cluster", cov_kwds={"groups": dfA["unit"]})
-                se_typeA = "Cluster-robust (by unit)"
-            else:
-                resA = modelA.fit(cov_type="HC1")
-                se_typeA = "Robust (HC1)"
-
-            termA = "treated:placebo_post"
-            coefA = float(resA.params.get(termA, np.nan))
-            seA = float(resA.bse.get(termA, np.nan))
-            pA = float(resA.pvalues.get(termA, np.nan))
-            ciLA, ciHA = resA.conf_int(alpha=alpha).loc[termA].tolist()
-
-            placeboA = PlaceboResult(
-                ok=True,
-                message="OK",
-                res=resA,
-                se_type=se_typeA,
-                term=termA,
-                coef=coefA,
-                se=seA,
-                pval=pA,
-                ci_low=float(ciLA),
-                ci_high=float(ciHA),
-                formula=formulaA,
-                n_obs=int(resA.nobs),
-            )
-        except Exception as e:
-            placeboA = PlaceboResult(ok=False, message=f"Model failed: {e}")
-
-if placeboA.ok:
-    a1, a2, a3, a4 = st.columns(4)
-    a1.metric("Placebo A interaction coef", f"{placeboA.coef:.4f}")
-    a2.metric("Std. Error", f"{placeboA.se:.4f}")
-    a3.metric("p-value", f"{placeboA.pval:.4g}")
-    a4.metric(f"{int((1-alpha)*100)}% CI", f"[{placeboA.ci_low:.4f}, {placeboA.ci_high:.4f}]")
-    st.caption(f"SE type: {placeboA.se_type} | Model: {placeboA.formula} | N={placeboA.n_obs}")
-
-    st.write("**Key statistics (Placebo A interaction term)**")
-    placeboA_key = key_term_stats(
-        res=placeboA.res,
-        term=placeboA.term,
-        alpha=alpha,
-        label="Placebo A (shifted cutoff)",
-        se_type=placeboA.se_type,
-        formula=placeboA.formula,
-    )
-    st.dataframe(placeboA_key, use_container_width=True)
-
-    st.write("**How to interpret Placebo A**")
-    st.markdown(
-        "- Pretends the policy started **earlier** than it did.\n"
-        "- If parallel trends holds, this should be close to **0** and usually **not significant**.\n"
-        f"- Here it is **{significance_badge(placeboA.pval, alpha)}** at α={alpha:.2f}."
-    )
-
-    with st.expander("Compact regression table (Placebo A)", expanded=False):
-        st.dataframe(compact_reg_table(placeboA.res, alpha=alpha), use_container_width=True)
-else:
-    st.info(f"Placebo A not run: {placeboA.message}")
-
-st.write("---")
-
-st.write("### Placebo B — Pre-period only (fake cutoff within pre)")
-df_pre = df_model.loc[df_model["post"] == 0].copy()
-
-if df_pre.empty or df_pre["treated"].nunique(dropna=True) < 2:
-    st.warning("Placebo B unavailable: no pre-period data or no treated/control variation in pre.")
-    placeboB = PlaceboResult(ok=False, message="Insufficient pre data.")
-else:
-    pre_times = sorted_unique_times(df_pre)
-    if len(pre_times) < 4:
-        st.warning("Placebo B unavailable: too few distinct pre-period time points.")
-        placeboB = PlaceboResult(ok=False, message="Too few pre time points.")
-    else:
-        inner_times = pre_times[1:-1]
-        default_idx = len(inner_times) // 2
-        fake_cutoff = st.selectbox(
-            "Choose a fake cutoff time within the PRE period",
-            options=inner_times,
-            index=default_idx,
-            help="Creates a fake 'post' inside pre to test for differential pre-trends.",
-        )
-
-        dfB = df_pre.copy()
-        dfB["placebo_post_pre"] = (dfB["time"] >= fake_cutoff).astype(int).astype(float)
-        okB, _countsB = has_all_cells(dfB, "treated", "placebo_post_pre")
-
-        if not okB:
-            st.warning("Placebo B has missing cells (treated/control × placebo pre/post).")
-            placeboB = PlaceboResult(ok=False, message="Missing placebo B 2x2 cells.")
-        else:
-            try:
-                cov_terms = (" + " + " + ".join(cov_cols)) if cov_cols else ""
-                formulaB = f"y ~ treated + placebo_post_pre + treated:placebo_post_pre{cov_terms}"
-                modelB = smf.ols(formula=formulaB, data=dfB)
-
-                if cluster:
-                    resB = modelB.fit(cov_type="cluster", cov_kwds={"groups": dfB["unit"]})
-                    se_typeB = "Cluster-robust (by unit)"
-                else:
-                    resB = modelB.fit(cov_type="HC1")
-                    se_typeB = "Robust (HC1)"
-
-                termB = "treated:placebo_post_pre"
-                coefB = float(resB.params.get(termB, np.nan))
-                seB = float(resB.bse.get(termB, np.nan))
-                pB = float(resB.pvalues.get(termB, np.nan))
-                ciLB, ciHB = resB.conf_int(alpha=alpha).loc[termB].tolist()
-
-                placeboB = PlaceboResult(
-                    ok=True,
-                    message="OK",
-                    res=resB,
-                    se_type=se_typeB,
-                    term=termB,
-                    coef=coefB,
-                    se=seB,
-                    pval=pB,
-                    ci_low=float(ciLB),
-                    ci_high=float(ciHB),
-                    formula=formulaB,
-                    n_obs=int(resB.nobs),
-                )
-            except Exception as e:
-                placeboB = PlaceboResult(ok=False, message=f"Model failed: {e}")
-
-if placeboB.ok:
-    b1, b2, b3, b4 = st.columns(4)
-    b1.metric("Placebo B interaction coef", f"{placeboB.coef:.4f}")
-    b2.metric("Std. Error", f"{placeboB.se:.4f}")
-    b3.metric("p-value", f"{placeboB.pval:.4g}")
-    b4.metric(f"{int((1-alpha)*100)}% CI", f"[{placeboB.ci_low:.4f}, {placeboB.ci_high:.4f}]")
-    st.caption(f"SE type: {placeboB.se_type} | Model: {placeboB.formula} | N={placeboB.n_obs}")
-
-    st.write("**Key statistics (Placebo B interaction term)**")
-    placeboB_key = key_term_stats(
-        res=placeboB.res,
-        term=placeboB.term,
-        alpha=alpha,
-        label="Placebo B (pre-only fake cutoff)",
-        se_type=placeboB.se_type,
-        formula=placeboB.formula,
-    )
-    st.dataframe(placeboB_key, use_container_width=True)
-
-    st.write("**How to interpret Placebo B**")
-    st.markdown(
-        "- Uses **only pre-treatment data** and inserts a fake cutoff inside pre.\n"
-        "- If treated vs control were diverging **before** the intervention, this may look significant.\n"
-        f"- Here it is **{significance_badge(placeboB.pval, alpha)}** at α={alpha:.2f}."
-    )
-
-    with st.expander("Compact regression table (Placebo B)", expanded=False):
-        st.dataframe(compact_reg_table(placeboB.res, alpha=alpha), use_container_width=True)
-else:
-    st.info(f"Placebo B not run: {placeboB.message}")
-
-st.write("---")
-
-# Visual diagnostic
-st.subheader("6) Visual Diagnostic — Main DiD vs Placebo Effects")
-
-if post_start is None or len(times) < 3:
-    st.info("Visual diagnostic not available (need a real post period and multiple time points).")
-else:
-    show_curve = st.checkbox("Show placebo shift curve (all K)", value=True)
-
-    if show_curve:
-        sweep = run_placebo_shift_sweep(
-            df_model=df_model,
-            cov_cols=cov_cols,
-            cluster=cluster,
-            alpha=alpha,
-            times=times,
-            real_cutoff_time=post_start,
-        )
-
-        if sweep.empty:
-            st.info("Could not compute placebo curve (many placebo cutoffs miss some 2×2 cells).")
-        else:
-            fig = plt.figure()
+            fig = plt.figure(figsize=(8, 4.5))
             ax = fig.add_subplot(111)
 
-            ax.plot(sweep["K_shift"], sweep["coef"], marker="o", label="Placebo A (treated×placebo_post)")
-            ax.fill_between(sweep["K_shift"], sweep["ci_low"], sweep["ci_high"], alpha=0.2)
+            if 0.0 in pt.columns:
+                ax.plot(pt.index, pt[0.0].values, marker="o", label="Control (treated=0)")
+            if 1.0 in pt.columns:
+                ax.plot(pt.index, pt[1.0].values, marker="o", label="Treated (treated=1)")
 
-            ax.axhline(coef_main, linestyle="--", linewidth=1, label="Main DiD coef")
-            ax.axhline(0, linestyle=":", linewidth=1, label="0 (expected if no pre-trends)")
+            if post_start is not None:
+                ax.axvline(post_start, linestyle="--", linewidth=1)
 
-            ax.set_xlabel("K (placebo starts K periods earlier than real cutoff)")
-            ax.set_ylabel("Interaction coefficient estimate")
-            ax.set_title("Placebo shift diagnostic (compare against 0 and main DiD)")
+            ax.set_xlabel("Time")
+            ax.set_ylabel("Average outcome (Y)")
             ax.legend()
+            ax.set_title("Average Y by group over time")
+            st.pyplot(fig, clear_figure=True)
+            plt.close(fig)
+        except Exception as e:
+            st.error(f"Parallel trends plot failed: {e}")
 
+    with plot2:
+        st.write("Outcome Distribution")
+        dist_mode = st.selectbox(
+            "Compare distributions",
+            options=[
+                "Treated vs Control (all periods)",
+                "Pre vs Post (all units)",
+                "4 groups (treated/control × pre/post)",
+            ],
+            index=0,
+        )
+
+        fig = plt.figure(figsize=(8, 4.5))
+        ax = fig.add_subplot(111)
+
+        y = df_model["y"].dropna()
+        if y.empty:
+            st.error("No valid outcome data to plot.")
+        else:
+            if dist_mode == "Treated vs Control (all periods)":
+                y0 = df_model.loc[df_model["treated"] == 0, "y"].dropna()
+                y1 = df_model.loc[df_model["treated"] == 1, "y"].dropna()
+                ax.hist(y0.values, bins=30, alpha=0.65, label="Control (treated=0)")
+                ax.hist(y1.values, bins=30, alpha=0.65, label="Treated (treated=1)")
+                ax.set_title("Outcome distribution: Treated vs Control")
+
+            elif dist_mode == "Pre vs Post (all units)":
+                ypre = df_model.loc[df_model["post"] == 0, "y"].dropna()
+                ypost = df_model.loc[df_model["post"] == 1, "y"].dropna()
+                ax.hist(ypre.values, bins=30, alpha=0.65, label="Pre (post=0)")
+                ax.hist(ypost.values, bins=30, alpha=0.65, label="Post (post=1)")
+                ax.set_title("Outcome distribution: Pre vs Post")
+
+            else:
+                labels = [
+                    ("Control-Pre", (df_model["treated"] == 0) & (df_model["post"] == 0)),
+                    ("Control-Post", (df_model["treated"] == 0) & (df_model["post"] == 1)),
+                    ("Treated-Pre", (df_model["treated"] == 1) & (df_model["post"] == 0)),
+                    ("Treated-Post", (df_model["treated"] == 1) & (df_model["post"] == 1)),
+                ]
+                for lab, mask in labels:
+                    yy = df_model.loc[mask, "y"].dropna()
+                    if len(yy) > 0:
+                        ax.hist(yy.values, bins=30, alpha=0.55, label=lab)
+                ax.set_title("Outcome distribution: 4 groups")
+
+            ax.set_xlabel("Outcome (Y)")
+            ax.set_ylabel("Count")
+            ax.legend()
             st.pyplot(fig, clear_figure=True)
             plt.close(fig)
 
-        with st.expander("Show placebo curve data table", expanded=False):
-            st.dataframe(sweep, use_container_width=True)
+with tab4:
+    st.subheader("Diagnostics (Placebo / Pre-trend checks)")
 
-st.divider()
-
-# -----------------------------
-# Plain-English Summary
-# -----------------------------
-st.subheader("7) Plain-English Summary")
-
-st.markdown(
-    """
-### What the main DiD estimate means (in simple words)
-- The **treated×post** term estimates:  
-  **(Treated post − Treated pre) − (Control post − Control pre)**  
-- It answers: *“Did treated change more (or less) than control after the intervention?”*
-- If **parallel trends** is plausible, we interpret this as the **causal effect on treated units**.
-
-### How to interpret the key statistics
-- **Coefficient:** size/direction of the effect
-- **Standard error:** uncertainty around the coefficient
-- **t-statistic:** coef ÷ SE
-- **p-value:** evidence against “true effect = 0”
-- **Confidence interval:** likely range for the true effect
-
-### Why diagnostics matter
-Even if your DiD is significant, it may not be causal if:
-- treated and control were already trending differently **before** the intervention,
-- your control group isn’t comparable,
-- or there are anticipation/selection issues.
-
-### Rule of thumb
-- ✅ Main DiD looks meaningful **and** placebo effects are near 0 / not significant  
-  → more consistent with a credible design.
-- ⚠️ Placebos significant or pre-trends visible  
-  → reconsider identification (better controls, narrower window, add fixed effects/event study).
+    with st.expander("What should I look for?", expanded=False):
+        st.markdown(
+            """
+- **Parallel trends:** in the pre-period, treated and control should move similarly  
+- **Placebo A (shift earlier):** should be near **0** / not significant  
+- **Placebo B (pre-only fake cutoff):** should be near **0** / not significant  
+If placebos are significant, your DiD may be picking up **pre-trends** (not causal).
 """
-)
+        )
+
+    st.write("Placebo A — Fake policy date (shift post earlier)")
+    post_start = infer_post_start_time(df_model)
+    times = sorted_unique_times(df_model)
+
+    if post_start is None or len(times) < 3:
+        st.warning("Placebo A unavailable: cannot infer post start time or too few time periods.")
+        placeboA = PlaceboResult(ok=False, message="Insufficient time periods or no post==1.")
+    else:
+        cutoff_idx = times.index(post_start)
+        max_k = max(1, cutoff_idx)
+
+        K = st.slider("Shift earlier by K time steps", min_value=1, max_value=int(max_k), value=1, step=1)
+        placebo_cutoff_time = times[max(0, cutoff_idx - K)]
+
+        dfA = df_model.copy()
+        dfA["placebo_post"] = (dfA["time"] >= placebo_cutoff_time).astype(int).astype(float)
+
+        okA, _countsA = has_all_cells(dfA, "treated", "placebo_post")
+        st.caption(f"Real cutoff: {post_start} | Placebo cutoff (K={K}): {placebo_cutoff_time}")
+
+        if not okA:
+            st.warning("Placebo A has missing cells (treated/control × placebo pre/post).")
+            placeboA = PlaceboResult(ok=False, message="Missing placebo A 2×2 cells.")
+        else:
+            try:
+                cov_terms = (" + " + " + ".join(cov_cols)) if cov_cols else ""
+                formulaA = f"y ~ treated + placebo_post + treated:placebo_post{cov_terms}"
+                modelA = smf.ols(formula=formulaA, data=dfA)
+
+                if cluster:
+                    resA = modelA.fit(cov_type="cluster", cov_kwds={"groups": dfA["unit"]})
+                    se_typeA = "Cluster-robust (by unit)"
+                else:
+                    resA = modelA.fit(cov_type="HC1")
+                    se_typeA = "Robust (HC1)"
+
+                termA = "treated:placebo_post"
+                coefA = float(resA.params.get(termA, np.nan))
+                seA = float(resA.bse.get(termA, np.nan))
+                pA = float(resA.pvalues.get(termA, np.nan))
+                ciLA, ciHA = resA.conf_int(alpha=alpha).loc[termA].tolist()
+
+                placeboA = PlaceboResult(
+                    ok=True,
+                    message="OK",
+                    res=resA,
+                    se_type=se_typeA,
+                    term=termA,
+                    coef=coefA,
+                    se=seA,
+                    pval=pA,
+                    ci_low=float(ciLA),
+                    ci_high=float(ciHA),
+                    formula=formulaA,
+                    n_obs=int(resA.nobs),
+                )
+            except Exception as e:
+                placeboA = PlaceboResult(ok=False, message=f"Model failed: {e}")
+
+    if placeboA.ok:
+        a1, a2, a3, a4 = st.columns(4)
+        a1.metric("Placebo A coef", f"{placeboA.coef:.4f}")
+        a2.metric("Std. Error", f"{placeboA.se:.4f}")
+        a3.metric("p-value", f"{placeboA.pval:.4g}")
+        a4.metric(f"{int((1-alpha)*100)}% CI", f"[{placeboA.ci_low:.4f}, {placeboA.ci_high:.4f}]")
+        st.caption(f"SE type: {placeboA.se_type} | Model: {placeboA.formula} | N={placeboA.n_obs}")
+
+        with st.expander("Key stats table (Placebo A)", expanded=False):
+            placeboA_key = key_term_stats(
+                res=placeboA.res,
+                term=placeboA.term,
+                alpha=alpha,
+                label="Placebo A (shifted cutoff)",
+                se_type=placeboA.se_type,
+                formula=placeboA.formula,
+            )
+            st.dataframe(placeboA_key, use_container_width=True)
+    else:
+        st.info(f"Placebo A not run: {placeboA.message}")
+
+    st.divider()
+
+    st.write("Placebo B — Pre-period only (fake cutoff within pre)")
+    df_pre = df_model.loc[df_model["post"] == 0].copy()
+
+    if df_pre.empty or df_pre["treated"].nunique(dropna=True) < 2:
+        st.warning("Placebo B unavailable: no pre-period data or no treated/control variation in pre.")
+        placeboB = PlaceboResult(ok=False, message="Insufficient pre data.")
+    else:
+        pre_times = sorted_unique_times(df_pre)
+        if len(pre_times) < 4:
+            st.warning("Placebo B unavailable: too few distinct pre-period time points.")
+            placeboB = PlaceboResult(ok=False, message="Too few pre time points.")
+        else:
+            inner_times = pre_times[1:-1]
+            default_idx = len(inner_times) // 2
+            fake_cutoff = st.selectbox(
+                "Choose a fake cutoff time within the PRE period",
+                options=inner_times,
+                index=default_idx,
+                help="Creates a fake 'post' inside pre to test for differential pre-trends.",
+            )
+
+            dfB = df_pre.copy()
+            dfB["placebo_post_pre"] = (dfB["time"] >= fake_cutoff).astype(int).astype(float)
+            okB, _countsB = has_all_cells(dfB, "treated", "placebo_post_pre")
+
+            if not okB:
+                st.warning("Placebo B has missing cells (treated/control × placebo pre/post).")
+                placeboB = PlaceboResult(ok=False, message="Missing placebo B 2×2 cells.")
+            else:
+                try:
+                    cov_terms = (" + " + " + ".join(cov_cols)) if cov_cols else ""
+                    formulaB = f"y ~ treated + placebo_post_pre + treated:placebo_post_pre{cov_terms}"
+                    modelB = smf.ols(formula=formulaB, data=dfB)
+
+                    if cluster:
+                        resB = modelB.fit(cov_type="cluster", cov_kwds={"groups": dfB["unit"]})
+                        se_typeB = "Cluster-robust (by unit)"
+                    else:
+                        resB = modelB.fit(cov_type="HC1")
+                        se_typeB = "Robust (HC1)"
+
+                    termB = "treated:placebo_post_pre"
+                    coefB = float(resB.params.get(termB, np.nan))
+                    seB = float(resB.bse.get(termB, np.nan))
+                    pB = float(resB.pvalues.get(termB, np.nan))
+                    ciLB, ciHB = resB.conf_int(alpha=alpha).loc[termB].tolist()
+
+                    placeboB = PlaceboResult(
+                        ok=True,
+                        message="OK",
+                        res=resB,
+                        se_type=se_typeB,
+                        term=termB,
+                        coef=coefB,
+                        se=seB,
+                        pval=pB,
+                        ci_low=float(ciLB),
+                        ci_high=float(ciHB),
+                        formula=formulaB,
+                        n_obs=int(resB.nobs),
+                    )
+                except Exception as e:
+                    placeboB = PlaceboResult(ok=False, message=f"Model failed: {e}")
+
+    if placeboB.ok:
+        b1, b2, b3, b4 = st.columns(4)
+        b1.metric("Placebo B coef", f"{placeboB.coef:.4f}")
+        b2.metric("Std. Error", f"{placeboB.se:.4f}")
+        b3.metric("p-value", f"{placeboB.pval:.4g}")
+        b4.metric(f"{int((1-alpha)*100)}% CI", f"[{placeboB.ci_low:.4f}, {placeboB.ci_high:.4f}]")
+        st.caption(f"SE type: {placeboB.se_type} | Model: {placeboB.formula} | N={placeboB.n_obs}")
+
+        with st.expander("Key stats table (Placebo B)", expanded=False):
+            placeboB_key = key_term_stats(
+                res=placeboB.res,
+                term=placeboB.term,
+                alpha=alpha,
+                label="Placebo B (pre-only fake cutoff)",
+                se_type=placeboB.se_type,
+                formula=placeboB.formula,
+            )
+            st.dataframe(placeboB_key, use_container_width=True)
+    else:
+        st.info(f"Placebo B not run: {placeboB.message}")
+
+    st.divider()
+
+    st.subheader("Visual Diagnostic — Main DiD vs Placebo shift curve")
+    if post_start is None or len(times) < 3:
+        st.info("Visual diagnostic not available (need a real post period and multiple time points).")
+    else:
+        show_curve = st.checkbox("Show placebo shift curve (all K)", value=True)
+        if show_curve:
+            sweep = run_placebo_shift_sweep(
+                df_model=df_model,
+                cov_cols=cov_cols,
+                cluster=cluster,
+                alpha=alpha,
+                times=times,
+                real_cutoff_time=post_start,
+            )
+
+            if sweep.empty:
+                st.info("Could not compute placebo curve (many placebo cutoffs miss some 2×2 cells).")
+            else:
+                fig = plt.figure(figsize=(9, 4.8))
+                ax = fig.add_subplot(111)
+
+                ax.plot(sweep["K_shift"], sweep["coef"], marker="o", label="Placebo A coef")
+                ax.fill_between(sweep["K_shift"], sweep["ci_low"], sweep["ci_high"], alpha=0.20)
+
+                ax.axhline(coef_main, linestyle="--", linewidth=1, label="Main DiD coef")
+                ax.axhline(0, linestyle=":", linewidth=1, label="0 (ideal if no pre-trends)")
+
+                ax.set_xlabel("K (placebo starts K periods earlier)")
+                ax.set_ylabel("Interaction coefficient")
+                ax.set_title("Placebo shift diagnostic")
+                ax.legend()
+
+                st.pyplot(fig, clear_figure=True)
+                plt.close(fig)
+
+            with st.expander("Show placebo curve data table", expanded=False):
+                st.dataframe(sweep, use_container_width=True)
+
+with tab5:
+    st.subheader("Plain-English Summary")
+
+    st.markdown(
+        f"""
+**Main result:** treated×post = **{coef_main:.4f}** (p = {p_main:.4g})  
+
+**Meaning:**  
+This compares how the treated group changed from pre→post, and subtracts how the control group changed from pre→post.
+
+**When it is causal:**  
+Only if treated and control would have followed **parallel trends** without the intervention.
+
+**Rule of thumb:**  
+- ✅ Main DiD meaningful and placebos ≈ 0 → more credible  
+- ⚠️ Placebos significant / pre-trends visible → control group or timing may be problematic
+"""
+    )
+
+    with st.expander("2×2 Means sanity check", expanded=False):
+        pivot, did_val, did_ok = did_2x2_table(df_model)
+        st.dataframe(pivot, use_container_width=True)
+        if did_ok and np.isfinite(did_val):
+            st.metric("Manual DiD from means", f"{did_val:.4f}")
+        else:
+            st.info("Manual DiD could not be computed (missing a 2×2 cell).")
+
+    with st.expander("2×2 cell counts (treated/control × pre/post)", expanded=False):
+        st.dataframe(cell_counts, use_container_width=True)
+
 
 
 
