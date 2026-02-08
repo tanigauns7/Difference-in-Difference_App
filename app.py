@@ -429,13 +429,20 @@ def numeric_like_columns(df: pd.DataFrame, min_non_na_share: float = 0.90) -> li
 # ============================================================
 st.markdown(f"# {APP_NAME}")
 st.caption(APP_SUBTITLE)
+st.info("Tip: Column mapping is below (even if your sidebar is collapsed).")
 
 # ============================================================
-# Data Input
+# Data Input (EDITED)
 # ============================================================
 st.subheader("Data input")
 uploaded = st.file_uploader("Upload a CSV file", type=["csv"])
-use_synth = st.checkbox("Use synthetic dataset (demo)", value=(uploaded is None))
+
+# ✅ Demo OFF by default, and disabled if a file is uploaded
+use_synth = st.checkbox(
+    "Use synthetic dataset (demo)",
+    value=False,
+    disabled=(uploaded is not None),
+)
 
 df_raw = None
 if uploaded is not None:
@@ -444,29 +451,35 @@ if uploaded is not None:
     except Exception:
         st.error("Could not read the uploaded CSV. Please check the file format and try again.")
         st.stop()
+elif use_synth:
+    df_raw = generate_synthetic()
 else:
-    if use_synth:
-        df_raw = generate_synthetic()
-    else:
-        st.info("Upload a CSV or enable the synthetic dataset checkbox to run a demo.")
-        st.stop()
+    st.info("Upload a CSV file OR enable the synthetic dataset checkbox to run a demo.")
+    st.stop()
 
 if df_raw is None or df_raw.empty:
     st.error("Dataset is empty or could not be loaded.")
     st.stop()
 
 # ============================================================
-# Sidebar Controls
+# Column Mapping (MAIN PAGE, EDITED)
+# ============================================================
+st.subheader("Column mapping")
+cols = df_raw.columns
+
+with st.expander("Choose outcome / treated / post / unit / time", expanded=True):
+    outcome_col = st.selectbox("Outcome (Y) (numeric)", cols, index=default_index(cols, "y"), key="outcome_col")
+    unit_col = st.selectbox("Unit ID", cols, index=default_index(cols, "unit_id"), key="unit_col")
+    time_col = st.selectbox("Time column", cols, index=default_index(cols, "time"), key="time_col")
+    treated_col = st.selectbox("Treated indicator (0/1)", cols, index=default_index(cols, "treated"), key="treated_col")
+    post_col = st.selectbox("Post indicator (0/1)", cols, index=default_index(cols, "post"), key="post_col")
+
+# ============================================================
+# Sidebar Controls (ONLY model options, EDITED)
 # ============================================================
 with st.sidebar:
     st.header("Controls")
-
-    cols = df_raw.columns
-    outcome_col = st.selectbox("Outcome (Y) (numeric)", cols, index=default_index(cols, "y"))
-    unit_col = st.selectbox("Unit ID", cols, index=default_index(cols, "unit_id"))
-    time_col = st.selectbox("Time column", cols, index=default_index(cols, "time"))
-    treated_col = st.selectbox("Treated indicator (0/1)", cols, index=default_index(cols, "treated"))
-    post_col = st.selectbox("Post indicator (0/1)", cols, index=default_index(cols, "post"))
+    st.caption("Column mapping is set in the main panel.")
 
     st.divider()
     num_candidates = numeric_like_columns(df_raw, min_non_na_share=0.90)
@@ -928,6 +941,7 @@ After the policy starts, the treated group shows an average **{direction}** in t
 If shifting the cutoff earlier yields significant “effects,” it suggests your estimate may be picking up **pre-trends** rather than a causal treatment effect.
 """
         )
+
 
 
 
