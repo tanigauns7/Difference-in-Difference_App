@@ -125,95 +125,133 @@ def generate_synthetic(seed=7, n_units=200, n_periods=10, effect=2.0):
 # =============================
 st.markdown(
     f"""
-<h1>{APP_NAME}</h1>
-<p style="opacity:0.85">{APP_SUBTITLE}</p>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
+
+:root {{
+  --font-scale: {font_scale};
+  --line-height: {line_height};
+  --max-width: {page_width}px;
+}}
+
+/* =============================
+   App base – LIGHT THEME
+   ============================= */
+.stApp {{
+  background: #ffffff;
+  color: #111827;
+  font-family: "Plus Jakarta Sans", system-ui;
+  font-size: calc(16px * var(--font-scale));
+  line-height: var(--line-height);
+}}
+
+.block-container {{
+  max-width: var(--max-width);
+  padding-top: 1.4rem;
+}}
+
+header, footer {{
+  visibility: hidden;
+}}
+
+/* =============================
+   Headings
+   ============================= */
+h1, h2, h3 {{
+  color: #030712 !important;
+  letter-spacing: -0.02em;
+}}
+
+/* Paragraph spacing */
+p, li {{
+  margin-bottom: 0.6rem;
+  color: #1f2937;
+}}
+
+/* =============================
+   Sidebar
+   ============================= */
+section[data-testid="stSidebar"] {{
+  background: #f9fafb;
+  border-right: 1px solid #e5e7eb;
+}}
+
+section[data-testid="stSidebar"] * {{
+  color: #030712 !important;
+}}
+
+/* =============================
+   Inputs
+   ============================= */
+div[data-baseweb="input"] input,
+div[data-baseweb="select"] > div {{
+  background: #ffffff !important;
+  border: 1px solid #d1d5db !important;
+  color: #030712 !important;
+  border-radius: 10px !important;
+}}
+
+/* =============================
+   Tabs – readable on white
+   ============================= */
+div[data-testid="stTabs"] button {{
+  color: #4b5563 !important;   /* inactive tabs */
+  font-weight: 600;
+  font-size: calc(1.05rem * var(--font-scale));
+}}
+
+div[data-testid="stTabs"] button[aria-selected="true"] {{
+  color: #000000 !important;
+  font-weight: 800;
+  border-bottom: 3px solid #111827;
+}}
+
+div[data-testid="stTabs"] button:hover {{
+  color: #000000 !important;
+}}
+
+/* =============================
+   Tables / DataFrames
+   ============================= */
+div[data-testid="stDataFrame"] {{
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+}}
+
+/* =============================
+   Metrics
+   ============================= */
+div[data-testid="stMetric"] {{
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 14px;
+}}
+
+div[data-testid="stMetricValue"] {{
+  color: #000000 !important;
+  font-weight: 800;
+}}
+
+div[data-testid="stMetricLabel"] {{
+  color: #374151 !important;
+}}
+
+/* =============================
+   File uploader
+   ============================= */
+section[data-testid="stFileUploaderDropzone"] {{
+  background: #f9fafb !important;
+  border: 1px dashed #9ca3af !important;
+  border-radius: 14px !important;
+}}
+
+</style>
 """,
     unsafe_allow_html=True,
 )
 
-# =============================
-# Data Upload
-# =============================
-st.subheader("Upload data")
-uploaded = st.file_uploader("Upload CSV", type=["csv"])
-use_synth = st.checkbox("Use synthetic dataset (if no file uploaded)", value=(uploaded is None))
-
-if uploaded:
-    df = pd.read_csv(uploaded)
-elif use_synth:
-    df = generate_synthetic()
-else:
-    st.stop()
-
-# =============================
-# Sidebar – Model Setup
-# =============================
-with st.sidebar:
-    st.header("Model setup")
-    outcome = st.selectbox("Outcome", df.columns, index=df.columns.get_loc("y"))
-    unit = st.selectbox("Unit ID", df.columns, index=df.columns.get_loc("unit_id"))
-    time = st.selectbox("Time", df.columns, index=df.columns.get_loc("time"))
-    treated = st.selectbox("Treated (0/1)", df.columns, index=df.columns.get_loc("treated"))
-    post = st.selectbox("Post (0/1)", df.columns, index=df.columns.get_loc("post"))
-    cluster = st.checkbox("Cluster SE by unit", value=True)
-
-# =============================
-# Prepare data
-# =============================
-dfm = df[[outcome, unit, time, treated, post]].dropna()
-dfm.columns = ["y", "unit", "time", "treated", "post"]
-
-# =============================
-# Run DiD
-# =============================
-model = smf.ols("y ~ treated + post + treated:post", data=dfm)
-res = model.fit(
-    cov_type="cluster",
-    cov_kwds={"groups": dfm["unit"]},
-) if cluster else model.fit(cov_type="HC1")
-
-coef = res.params["treated:post"]
-pval = res.pvalues["treated:post"]
-ci = res.conf_int().loc["treated:post"]
-
-# =============================
-# Tabs
-# =============================
-tab1, tab2, tab3, tab4, tab5 = st.tabs(
-    ["📄 Preview", "📌 Estimate", "📈 Plots", "🧪 Diagnostics", "📝 Summary"]
-)
-
-with tab1:
-    st.dataframe(df.head(20), use_container_width=True)
-
-with tab2:
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("DiD coef", f"{coef:.3f}")
-    c2.metric("p-value", f"{pval:.4g}")
-    c3.metric("CI low", f"{ci[0]:.3f}")
-    c4.metric("CI high", f"{ci[1]:.3f}")
-
-with tab3:
-    g = dfm.groupby(["time", "treated"])["y"].mean().reset_index()
-    pivot = g.pivot(index="time", columns="treated", values="y")
-
-    fig, ax = plt.subplots(figsize=(8, 4))
-    ax.plot(pivot.index, pivot[0], marker="o", label="Control")
-    ax.plot(pivot.index, pivot[1], marker="o", label="Treated")
-    ax.axvline(6, linestyle="--")
-    ax.set_title("Parallel trends")
-    ax.legend()
-    st.pyplot(fig)
-
-with tab4:
-    st.info(
-        "Diagnostics: Placebo tests and pre-trend checks should be near zero "
-        "if the parallel trends assumption holds."
-    )
-
-with tab5:
-    st.markdown(
-        f"""
 ### Plain-English Summary
 
 - **Estimated effect:** {coef:.3f}  
