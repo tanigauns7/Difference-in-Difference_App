@@ -528,17 +528,30 @@ DiD is a causal method used when:
 """
 )
 
-# ✅ Move dataset requirements BEFORE upload
-with st.expander("✅ Dataset requirements (read before uploading)", expanded=True):
-    st.write(
-        "- **One row per unit-time observation.**\n"
-        "- `treated` is a group indicator (1 for treated units, 0 for controls).\n"
-        "- `post` indicates the post-treatment periods (1 after treatment begins, 0 before).\n"
-        "- Outcome `Y` should be numeric (or convertible to numeric).\n"
-        "- Covariates optional; numeric recommended.\n"
-    )
+st.markdown(
+    """
+<div style="
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(17,24,39,0.55);
+  backdrop-filter: blur(6px);
+  margin-top: 10px;
+  margin-bottom: 10px;
+">
+  <div style="font-size: 16px; font-weight: 800; margin-bottom: 8px;">✅ Dataset requirements (read before uploading)</div>
+  <ul style="margin: 0 0 0 18px; color: rgba(229,231,235,0.92); line-height: 1.55;">
+    <li><b>One row per unit-time observation.</b></li>
+    <li><code>treated</code> is a group indicator (1 treated, 0 control).</li>
+    <li><code>post</code> indicates post-treatment periods (1 after treatment begins, 0 before).</li>
+    <li>Outcome <code>Y</code> should be numeric (or convertible to numeric).</li>
+    <li>Covariates optional; numeric recommended.</li>
+  </ul>
+</div>
+""",
+    unsafe_allow_html=True,
+)
 
-st.divider()
 
 with st.expander("Install / Run Instructions", expanded=False):
     st.code(
