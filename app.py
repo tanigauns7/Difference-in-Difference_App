@@ -20,7 +20,7 @@ st.set_page_config(
 )
 
 # ============================================================
-# Global Styling (LIGHT)
+# Global Styling (LIGHT) — FIXED so sidebar toggle stays visible
 # ============================================================
 st.markdown(
     """
@@ -47,7 +47,14 @@ st.markdown(
   padding-bottom: 2.0rem;
 }
 
-header, footer{ visibility: hidden; }
+/* ✅ IMPORTANT: keep header visible so the sidebar toggle ("bars") works */
+header { visibility: visible; }
+
+/* Hide Streamlit chrome without killing the header toggle */
+[data-testid="stToolbar"] { visibility: hidden; height: 0; }
+[data-testid="stDecoration"] { display: none; }
+#MainMenu { visibility: hidden; }
+footer { visibility: hidden; height: 0; }
 
 h1, h2, h3{ letter-spacing: -0.02em; color: #030712 !important; }
 p, li{ color: #1f2937; }
@@ -166,8 +173,10 @@ def did_design_checklist(dfm: pd.DataFrame) -> tuple:
     status = "ok"
 
     if dfm.empty:
-        return "fail", [("fail", "No usable rows after cleaning. Check missing values / column selections.")], build_2x2_cell_counts(
-            pd.DataFrame({"treated": [], "post": []}), "treated", "post"
+        return (
+            "fail",
+            [("fail", "No usable rows after cleaning. Check missing values / column selections.")],
+            build_2x2_cell_counts(pd.DataFrame({"treated": [], "post": []}), "treated", "post"),
         )
 
     if dfm["y"].notna().mean() < 0.90:
@@ -306,6 +315,7 @@ def compact_reg_table(res_any, alpha: float, top_terms: list = None) -> pd.DataF
     if top_terms is None:
         top_terms = []
 
+    names = []
     params = getattr(res_any, "params", None)
     if params is None:
         return pd.DataFrame()
@@ -332,15 +342,21 @@ def compact_reg_table(res_any, alpha: float, top_terms: list = None) -> pd.DataF
         ci_high = np.full_like(coef, np.nan, dtype=float)
 
     df_out = pd.DataFrame(
-        {"term": names, "coef": coef, "se": se, "t": tvals, "p": pvals, "ci_low": ci_low, "ci_high": ci_high}
+        {
+            "term": names if len(names) == len(coef) else [f"x{i}" for i in range(len(coef))],
+            "coef": coef,
+            "se": se,
+            "t": tvals,
+            "p": pvals,
+            "ci_low": ci_low,
+            "ci_high": ci_high,
+        }
     )
 
     if top_terms:
         order = [t for t in top_terms if t in df_out["term"].values]
         rest = [t for t in df_out["term"].tolist() if t not in order]
-        df_out["__order"] = df_out["term"].apply(
-            lambda x: order.index(x) if x in order else (len(order) + rest.index(x))
-        )
+        df_out["__order"] = df_out["term"].apply(lambda x: order.index(x) if x in order else (len(order) + rest.index(x)))
         df_out = df_out.sort_values("__order").drop(columns="__order")
 
     return df_out
@@ -420,16 +436,12 @@ def numeric_like_columns(df: pd.DataFrame, min_non_na_share: float = 0.90) -> li
 st.markdown(f"# {APP_NAME}")
 st.caption(APP_SUBTITLE)
 
-# ✅ Big hint so users know where controls are
-st.info("Controls (column mapping + options) are in the left sidebar. If you don't see it, open the sidebar (top-left arrow).")
-
 # ============================================================
-# Data Input (FIXED)
+# Data Input (demo OFF by default; header toggle preserved)
 # ============================================================
 st.subheader("Data input")
 uploaded = st.file_uploader("Upload a CSV file", type=["csv"])
 
-# ✅ FIX: Demo OFF by default; disable demo if file uploaded
 use_synth = st.checkbox(
     "Use synthetic dataset (demo)",
     value=False,
@@ -454,7 +466,7 @@ if df_raw is None or df_raw.empty:
     st.stop()
 
 # ============================================================
-# Sidebar Controls (COLUMN MAPPING BACK IN SIDEBAR)
+# Sidebar Controls (Column mapping in sidebar)
 # ============================================================
 with st.sidebar:
     st.header("Controls")
@@ -617,7 +629,10 @@ with tab_est:
         c4.metric(f"{int((1 - alpha) * 100)}% CI", f"[{did_ciL:.4f}, {did_ciH:.4f}]" if np.isfinite(did_ciL) else "NA")
         st.caption(f"SE type: {se_label} | Model: {formula_main}")
 
-        direction = "increases" if (np.isfinite(did_coef) and did_coef > 0) else ("decreases" if (np.isfinite(did_coef) and did_coef < 0) else "does not change")
+        direction = (
+            "increases" if (np.isfinite(did_coef) and did_coef > 0)
+            else ("decreases" if (np.isfinite(did_coef) and did_coef < 0) else "does not change")
+        )
         st.markdown(
             f"**Interpretation:** Under the **parallel trends assumption**, the intervention {direction} the treated group’s outcome **relative to the control group** by **{did_coef:.4f}** units on average."
             if np.isfinite(did_coef)
@@ -717,7 +732,7 @@ with tab_plots:
     except Exception:
         st.warning("Could not generate the parallel trends plot.")
 
-    st.markdown("### 2) Pre vs post comparison: averages by group)")
+    st.markdown("### 2) Pre vs post comparison: averages by group")
     try:
         agg = (
             dfm.assign(period=dfm["post"].map({0.0: "Pre", 1.0: "Post"}))
@@ -929,6 +944,7 @@ After the policy starts, the treated group shows an average **{direction}** in t
 If shifting the cutoff earlier yields significant “effects,” it suggests your estimate may be picking up **pre-trends** rather than a causal treatment effect.
 """
         )
+
 
 
 
