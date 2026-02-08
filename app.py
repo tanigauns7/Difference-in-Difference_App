@@ -9,7 +9,7 @@ from dataclasses import dataclass
 # =============================
 # App Identity + Dark Styling
 # =============================
-APP_NAME = "DiD Insight Studio"
+APP_NAME = "Difference-in-Differences  Insight Studio"
 APP_SUBTITLE = "Difference-in-Differences estimator with diagnostics, plots, and placebo checks."
 
 st.set_page_config(page_title=APP_NAME, page_icon="📊", layout="wide")
