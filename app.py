@@ -7,46 +7,139 @@ import statsmodels.formula.api as smf
 from dataclasses import dataclass
 
 # =============================
-# App Identity + Dark Styling
+# App Identity
 # =============================
 APP_NAME = "DiD Insight Studio"
 APP_SUBTITLE = "Difference-in-Differences estimator with diagnostics, plots, and placebo checks."
 
 st.set_page_config(page_title=APP_NAME, page_icon="📊", layout="wide")
 
-# Strong dark UI even without .streamlit/config.toml
+# =============================
+# Professional Dark Theme Styling
+# =============================
 st.markdown(
     """
 <style>
-/* Global background */
-.stApp { background-color: #0B0F14; color: #E5E7EB; }
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
 
-/* Remove some default whitespace feel */
-.block-container { padding-top: 1.2rem; }
-
-/* Make metric cards feel like dashboard tiles */
-div[data-testid="stMetric"] {
-  background-color: #111827;
-  padding: 14px 16px;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.08);
+/* App base */
+.stApp {
+  background:
+    radial-gradient(900px 600px at 20% 10%, rgba(124, 58, 237, 0.18), rgba(0,0,0,0) 60%),
+    radial-gradient(900px 600px at 85% 20%, rgba(16, 185, 129, 0.12), rgba(0,0,0,0) 60%),
+    linear-gradient(180deg, #070B11 0%, #0B0F14 40%, #090D13 100%);
+  color: #E5E7EB;
+  font-family: "Plus Jakarta Sans", system-ui, -apple-system, Segoe UI, Roboto, Arial;
 }
 
-/* Dataframe border polish */
+/* Layout */
+.block-container { padding-top: 1.1rem; padding-bottom: 2rem; max-width: 1180px; }
+
+/* Hide Streamlit default header/footer */
+header { visibility: hidden; }
+footer { visibility: hidden; }
+
+/* Headings */
+h1, h2, h3, h4 {
+  letter-spacing: -0.01em !important;
+}
+
+/* Sidebar polish */
+section[data-testid="stSidebar"] {
+  background: linear-gradient(180deg, rgba(17,24,39,0.92), rgba(9,13,19,0.92));
+  border-right: 1px solid rgba(255,255,255,0.06);
+}
+section[data-testid="stSidebar"] * { color: #E5E7EB !important; }
+
+/* Buttons / inputs */
+.stButton>button {
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(17,24,39,0.7);
+}
+.stButton>button:hover {
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(17,24,39,0.9);
+}
+
+/* Metric cards */
+div[data-testid="stMetric"] {
+  background: rgba(17, 24, 39, 0.72);
+  border: 1px solid rgba(255,255,255,0.08);
+  padding: 14px 16px;
+  border-radius: 16px;
+  backdrop-filter: blur(6px);
+}
+div[data-testid="stMetric"] label {
+  opacity: 0.85;
+}
+
+/* Dataframe cards */
 div[data-testid="stDataFrame"] {
-  border-radius: 14px;
+  border-radius: 16px;
   overflow: hidden;
   border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(17,24,39,0.45);
+  backdrop-filter: blur(6px);
 }
 
 /* Code blocks */
-pre { border-radius: 12px !important; }
+pre, code {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas !important;
+}
+pre { border-radius: 14px !important; border: 1px solid rgba(255,255,255,0.08) !important; }
 
-/* Section headers spacing */
-h1, h2, h3 { letter-spacing: 0.2px; }
-
-/* Subtle divider */
+/* Divider */
 hr { border-top: 1px solid rgba(255,255,255,0.10); }
+
+/* Hero title styling */
+.hero-wrap {
+  padding: 18px 18px 14px 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background:
+    radial-gradient(900px 200px at 30% 0%, rgba(124,58,237,0.18), rgba(0,0,0,0) 60%),
+    radial-gradient(900px 200px at 85% 0%, rgba(16,185,129,0.12), rgba(0,0,0,0) 60%),
+    rgba(17,24,39,0.55);
+  backdrop-filter: blur(8px);
+}
+
+.hero-title {
+  font-size: 46px;
+  font-weight: 800;
+  line-height: 1.05;
+  margin: 0;
+  letter-spacing: -0.03em;
+  background: linear-gradient(90deg, #E5E7EB 0%, #C7D2FE 35%, #A7F3D0 75%, #E5E7EB 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.hero-subtitle {
+  margin-top: 10px;
+  font-size: 14.5px;
+  color: rgba(229,231,235,0.85);
+}
+
+.hero-badges {
+  margin-top: 12px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.badge {
+  font-size: 12.5px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(11,15,20,0.35);
+  color: rgba(229,231,235,0.92);
+}
+.badge b { font-weight: 700; color: rgba(255,255,255,0.92); }
+
+/* Small helper */
+.muted { color: rgba(229,231,235,0.75); }
 </style>
 """,
     unsafe_allow_html=True,
@@ -56,10 +149,7 @@ hr { border-top: 1px solid rgba(255,255,255,0.10); }
 # Helpers
 # -----------------------------
 def try_parse_time(s: pd.Series) -> pd.Series:
-    """
-    Try to parse a time column that may be numeric-like or date-like.
-    Returns a series that is either datetime64[ns] or numeric.
-    """
+    """Try to parse a time column that may be numeric-like or date-like."""
     if np.issubdtype(s.dtype, np.datetime64):
         return s
 
@@ -76,10 +166,7 @@ def try_parse_time(s: pd.Series) -> pd.Series:
 
 
 def coerce_binary01(series: pd.Series, name: str):
-    """
-    Coerce a series to 0/1 if possible.
-    Returns (coerced_series, warning_messages_list).
-    """
+    """Coerce a series to 0/1 if possible. Returns (coerced_series, warning_messages_list)."""
     msgs = []
     s = series.copy()
 
@@ -104,9 +191,7 @@ def coerce_binary01(series: pd.Series, name: str):
 
 
 def make_design_df(df: pd.DataFrame, outcome, unit_id, time_col, treated, post, covariates):
-    """
-    Build a clean modeling dataframe with safe column names.
-    """
+    """Build a clean modeling dataframe with safe column names."""
     cols = [outcome, unit_id, time_col, treated, post] + (covariates or [])
     d = df[cols].copy()
 
@@ -132,10 +217,7 @@ def make_design_df(df: pd.DataFrame, outcome, unit_id, time_col, treated, post, 
 
 
 def fit_did_model(df_model: pd.DataFrame, covariate_cols, cluster: bool, alpha: float):
-    """
-    Fit DiD regression:
-      y ~ treated + post + treated:post (+ covariates)
-    """
+    """Fit DiD regression: y ~ treated + post + treated:post (+ covariates)"""
     cov_terms = ""
     if covariate_cols:
         cov_terms = " + " + " + ".join(covariate_cols)
@@ -179,10 +261,9 @@ def compact_reg_table(res, alpha: float):
     return out.reset_index()
 
 
-# ---------- NEW: reporting helpers ----------
+# ---------- Reporting helpers ----------
 def model_fit_stats(res):
-    """Compact model-level stats for quick reporting."""
-    out = {
+    return {
         "N (obs)": int(getattr(res, "nobs", np.nan)),
         "R-squared": float(getattr(res, "rsquared", np.nan)),
         "Adj. R-squared": float(getattr(res, "rsquared_adj", np.nan)),
@@ -191,44 +272,55 @@ def model_fit_stats(res):
         "DF Model": float(getattr(res, "df_model", np.nan)),
         "DF Resid": float(getattr(res, "df_resid", np.nan)),
     }
-    return out
 
 
 def key_term_stats(res, term: str, alpha: float, label: str, se_type: str, formula: str):
-    """One-row summary table for the main DiD interaction (or placebo interaction)."""
     if term not in res.params.index:
-        return pd.DataFrame([{
-            "Model": label, "Term": term, "coef": np.nan, "std_err": np.nan, "t": np.nan,
-            "p_value": np.nan, f"CI_{int((1-alpha)*100)}%_low": np.nan, f"CI_{int((1-alpha)*100)}%_high": np.nan,
-            "SE type": se_type, "Formula": formula, "N (obs)": int(getattr(res, "nobs", 0))
-        }])
+        return pd.DataFrame(
+            [
+                {
+                    "Model": label,
+                    "Term": term,
+                    "coef": np.nan,
+                    "std_err": np.nan,
+                    "t": np.nan,
+                    "p_value": np.nan,
+                    f"CI_{int((1-alpha)*100)}%_low": np.nan,
+                    f"CI_{int((1-alpha)*100)}%_high": np.nan,
+                    "SE type": se_type,
+                    "Formula": formula,
+                    "N (obs)": int(getattr(res, "nobs", 0)),
+                }
+            ]
+        )
 
     ci = res.conf_int(alpha=alpha).loc[term].tolist()
-    row = {
-        "Model": label,
-        "Term": term,
-        "coef": float(res.params[term]),
-        "std_err": float(res.bse[term]),
-        "t": float(res.tvalues[term]),
-        "p_value": float(res.pvalues[term]),
-        f"CI_{int((1-alpha)*100)}%_low": float(ci[0]),
-        f"CI_{int((1-alpha)*100)}%_high": float(ci[1]),
-        "SE type": se_type,
-        "Formula": formula,
-        "N (obs)": int(getattr(res, "nobs", 0)),
-    }
-    return pd.DataFrame([row])
+    return pd.DataFrame(
+        [
+            {
+                "Model": label,
+                "Term": term,
+                "coef": float(res.params[term]),
+                "std_err": float(res.bse[term]),
+                "t": float(res.tvalues[term]),
+                "p_value": float(res.pvalues[term]),
+                f"CI_{int((1-alpha)*100)}%_low": float(ci[0]),
+                f"CI_{int((1-alpha)*100)}%_high": float(ci[1]),
+                "SE type": se_type,
+                "Formula": formula,
+                "N (obs)": int(getattr(res, "nobs", 0)),
+            }
+        ]
+    )
 
 
 def significance_badge(pval: float, alpha: float):
-    """Human-friendly label for significance."""
     if not np.isfinite(pval):
         return "unknown"
     return "significant" if pval < alpha else "not significant"
 
 
 def did_interpretation_points(effect: float, pval: float, alpha: float):
-    """Bullet-point interpretation for the key DiD term."""
     sig = significance_badge(pval, alpha)
     direction = "increases" if effect > 0 else ("decreases" if effect < 0 else "does not change")
     return [
@@ -237,7 +329,6 @@ def did_interpretation_points(effect: float, pval: float, alpha: float):
         f"Statistical result: **{sig}** at α = {alpha:.2f} (p = {pval:.4g}).",
         "Causal interpretation relies on the **parallel trends** assumption (treated and control would have moved similarly without the intervention).",
     ]
-# ---------- end NEW helpers ----------
 
 
 def did_2x2_table(df_model: pd.DataFrame):
@@ -303,10 +394,6 @@ def has_all_cells(df, treat_col, post_col):
 
 
 def run_placebo_shift_sweep(df_model, cov_cols, cluster, alpha, times, real_cutoff_time):
-    """
-    Sweep placebo cutoffs by shifting earlier K=1..max_k and plotting the placebo interaction.
-    Returns dataframe with coef + CI by K.
-    """
     rows = []
     cutoff_idx = times.index(real_cutoff_time)
     max_k = max(1, cutoff_idx)
@@ -407,10 +494,21 @@ def generate_synthetic(seed=7, n_units=200, n_periods=10, treat_share=0.5, effec
 # =============================
 # UI
 # =============================
-st.title(APP_NAME)
-st.caption(APP_SUBTITLE)
+st.markdown(
+    f"""
+<div class="hero-wrap">
+  <div class="hero-title">{APP_NAME}</div>
+  <div class="hero-subtitle">{APP_SUBTITLE}</div>
+  <div class="hero-badges">
+    <span class="badge"><b>Model</b>: OLS DiD (treated×post)</span>
+    <span class="badge"><b>Diagnostics</b>: parallel trends + placebo</span>
+    <span class="badge"><b>SE</b>: robust / cluster</span>
+  </div>
+</div>
+""",
+    unsafe_allow_html=True,
+)
 
-# ---------- NEW: Introduction ----------
 st.markdown(
     """
 ### 👋 Welcome — What this app does
@@ -418,36 +516,29 @@ st.markdown(
 - Fits a DiD regression and reports the key interaction (**treated × post**)
 - Shows a **2×2 means sanity check**
 - Visualizes **parallel trends** (average outcome over time)
-- Runs **placebo tests** to detect potential **pre-trends**
+- Runs placebo checks to detect potential pre-trends
 
 ### What is Difference-in-Differences (DiD)?
 DiD is a causal method used when:
-- One group is **exposed** to a policy/intervention (**treated**),
-- Another similar group is **not exposed** (**control**),
-- You observe outcomes **before and after** the intervention.
+- One group is exposed to a policy/intervention (**treated**)
+- Another similar group is not exposed (**control**)
+- You observe outcomes **before and after** the intervention
 
-**Core idea:**  
-We compare how the treated group changes from **pre → post**, and subtract how the control group changes from **pre → post**.
-
-### How to use this app (workflow)
-1) Upload your CSV (or use the synthetic data)  
-2) Choose columns: outcome, unit id, time, treated, post  
-3) Read the **treated×post** effect (main DiD)  
-4) Check diagnostics (plots + placebo tests) before making causal claims
+**Core idea:** Compare how treated changes **pre → post**, and subtract how control changes **pre → post**.
 """
 )
 
-with st.expander("✅ Dataset requirements (recommended format)", expanded=False):
+# ✅ Move dataset requirements BEFORE upload
+with st.expander("✅ Dataset requirements (read before uploading)", expanded=True):
     st.write(
-        "- **One row per unit-time observation** (panel / longitudinal data)\n"
-        "- `treated` is a group indicator (1 treated units, 0 control units)\n"
-        "- `post` indicates post-treatment periods (1 after treatment begins, 0 before)\n"
-        "- Outcome `Y` should be numeric (or convertible to numeric)\n"
-        "- Covariates optional; numeric recommended\n"
+        "- **One row per unit-time observation.**\n"
+        "- `treated` is a group indicator (1 for treated units, 0 for controls).\n"
+        "- `post` indicates the post-treatment periods (1 after treatment begins, 0 before).\n"
+        "- Outcome `Y` should be numeric (or convertible to numeric).\n"
+        "- Covariates optional; numeric recommended.\n"
     )
 
 st.divider()
-# ---------- end NEW intro ----------
 
 with st.expander("Install / Run Instructions", expanded=False):
     st.code(
@@ -486,7 +577,7 @@ if df_raw.empty:
 
 cols = df_raw.columns.tolist()
 
-# Sidebar “app-like” controls
+# Sidebar controls
 with st.sidebar:
     st.header("Model Setup")
     outcome_col = st.selectbox("Outcome (Y)", options=cols, index=cols.index("y") if "y" in cols else 0)
@@ -573,7 +664,6 @@ kpi4.metric(f"{int((1-alpha)*100)}% CI", f"[{ciL_main:.4f}, {ciH_main:.4f}]")
 st.caption(f"SE type: {se_type_main} | Model: {formula_main}")
 st.markdown(render_interpretation(coef_main, p_main, alpha, label="Main DiD"))
 
-# ---------- NEW: Key stats table + bullets ----------
 st.write("**Key statistics (Main DiD interaction term)**")
 main_key = key_term_stats(
     res=res_main,
@@ -591,7 +681,6 @@ for pt in did_interpretation_points(coef_main, p_main, alpha):
 
 with st.expander("Model fit statistics (Main DiD)", expanded=False):
     st.json(model_fit_stats(res_main))
-# ---------- end NEW ----------
 
 with st.expander("Compact regression table (main model)", expanded=False):
     st.dataframe(compact_reg_table(res_main, alpha=alpha), use_container_width=True)
@@ -723,33 +812,18 @@ st.divider()
 # -----------------------------
 st.subheader("5) Diagnostics (Placebo / Pre-trend checks)")
 
-# ---------- NEW: Diagnostics checklist ----------
 st.markdown(
     """
 ### ✅ Diagnostics checklist (what to check and why it matters)
-
-**Why diagnostics are important:**  
-A DiD estimate can look “significant” even when it’s **not causal**, especially if treated and control groups were
-already trending differently before the intervention.
+**Why diagnostics are important:** A DiD estimate can look “significant” even when it’s **not causal** if treated and control were already trending differently.
 
 **What to check in this app:**
-1) **2×2 cell counts (treated/control × pre/post)**  
-   - You need all 4 cells. Missing cells can make DiD impossible or misleading.
-
-2) **Parallel trends plot (Average Y over time)**  
-   - Focus on the **pre-period**: treated and control should move roughly in parallel before the policy.
-
-3) **Placebo A (shift the policy earlier)**  
-   - A significant placebo suggests **pre-trends**, anticipation effects, or a weak control group.
-
-4) **Placebo B (pre-only fake cutoff)**  
-   - A significant placebo suggests treated and control were diverging even within pre.
-
-5) **Sensitivity thinking (outside this app, but important)**  
-   - Try adding/removing covariates, checking alternative control groups, or changing the time window.
+1) **2×2 cells exist** (treated/control × pre/post)  
+2) **Parallel trends plot** looks similar in the pre period  
+3) **Placebo A** (shift policy earlier) is near 0 / not significant  
+4) **Placebo B** (pre-only fake cutoff) is near 0 / not significant  
 """
 )
-# ---------- end NEW checklist ----------
 
 st.write("### Placebo A — Fake policy date (shift post earlier)")
 times = sorted_unique_times(df_model)
@@ -767,7 +841,7 @@ else:
     dfA = df_model.copy()
     dfA["placebo_post"] = (dfA["time"] >= placebo_cutoff_time).astype(int).astype(float)
 
-    okA, countsA = has_all_cells(dfA, "treated", "placebo_post")
+    okA, _countsA = has_all_cells(dfA, "treated", "placebo_post")
 
     st.caption(f"Real cutoff: {post_start} | Placebo cutoff (K={K}): {placebo_cutoff_time}")
 
@@ -818,7 +892,6 @@ if placeboA.ok:
     a4.metric(f"{int((1-alpha)*100)}% CI", f"[{placeboA.ci_low:.4f}, {placeboA.ci_high:.4f}]")
     st.caption(f"SE type: {placeboA.se_type} | Model: {placeboA.formula} | N={placeboA.n_obs}")
 
-    # ---------- NEW: Placebo A key table ----------
     st.write("**Key statistics (Placebo A interaction term)**")
     placeboA_key = key_term_stats(
         res=placeboA.res,
@@ -832,11 +905,10 @@ if placeboA.ok:
 
     st.write("**How to interpret Placebo A**")
     st.markdown(
-        "- This pretends the policy started **earlier** than it really did.\n"
-        "- If **parallel trends** holds, the placebo interaction should be close to **0** and usually **not significant**.\n"
+        "- Pretends the policy started **earlier** than it did.\n"
+        "- If parallel trends holds, this should be close to **0** and usually **not significant**.\n"
         f"- Here it is **{significance_badge(placeboA.pval, alpha)}** at α={alpha:.2f}."
     )
-    # ---------- end NEW ----------
 
     with st.expander("Compact regression table (Placebo A)", expanded=False):
         st.dataframe(compact_reg_table(placeboA.res, alpha=alpha), use_container_width=True)
@@ -868,7 +940,7 @@ else:
 
         dfB = df_pre.copy()
         dfB["placebo_post_pre"] = (dfB["time"] >= fake_cutoff).astype(int).astype(float)
-        okB, countsB = has_all_cells(dfB, "treated", "placebo_post_pre")
+        okB, _countsB = has_all_cells(dfB, "treated", "placebo_post_pre")
 
         if not okB:
             st.warning("Placebo B has missing cells (treated/control × placebo pre/post).")
@@ -917,7 +989,6 @@ if placeboB.ok:
     b4.metric(f"{int((1-alpha)*100)}% CI", f"[{placeboB.ci_low:.4f}, {placeboB.ci_high:.4f}]")
     st.caption(f"SE type: {placeboB.se_type} | Model: {placeboB.formula} | N={placeboB.n_obs}")
 
-    # ---------- NEW: Placebo B key table ----------
     st.write("**Key statistics (Placebo B interaction term)**")
     placeboB_key = key_term_stats(
         res=placeboB.res,
@@ -931,11 +1002,10 @@ if placeboB.ok:
 
     st.write("**How to interpret Placebo B**")
     st.markdown(
-        "- This uses **only pre-treatment data** and inserts a fake cutoff inside the pre period.\n"
-        "- If treated vs control were already diverging **before** the intervention, this placebo may look significant.\n"
+        "- Uses **only pre-treatment data** and inserts a fake cutoff inside pre.\n"
+        "- If treated vs control were diverging **before** the intervention, this may look significant.\n"
         f"- Here it is **{significance_badge(placeboB.pval, alpha)}** at α={alpha:.2f}."
     )
-    # ---------- end NEW ----------
 
     with st.expander("Compact regression table (Placebo B)", expanded=False):
         st.dataframe(compact_reg_table(placeboB.res, alpha=alpha), use_container_width=True)
@@ -944,7 +1014,7 @@ else:
 
 st.write("---")
 
-# Visual requested: show placebo effects together with main DiD
+# Visual diagnostic
 st.subheader("6) Visual Diagnostic — Main DiD vs Placebo Effects")
 
 if post_start is None or len(times) < 3:
@@ -993,48 +1063,34 @@ st.divider()
 st.subheader("7) Plain-English Summary")
 
 st.markdown(
-    f"""
+    """
 ### What the main DiD estimate means (in simple words)
 - The **treated×post** term estimates:  
-  **(Treated post − Treated pre) − (Control post − Control pre)**
-- It answers: *“Did the treated group change more (or less) than the control group after the intervention?”*
+  **(Treated post − Treated pre) − (Control post − Control pre)**  
+- It answers: *“Did treated change more (or less) than control after the intervention?”*
 - If **parallel trends** is plausible, we interpret this as the **causal effect on treated units**.
 
 ### How to interpret the key statistics
-- **Coefficient (coef):** size and direction of the estimated effect.
-- **Standard error (SE):** uncertainty around the coefficient.
-- **t-statistic:** coef ÷ SE (signal-to-noise).
-- **p-value:** how surprising the estimate is if the true effect were 0.
-- **Confidence interval (CI):** likely range for the true effect (e.g., 95% CI when α=0.05).
+- **Coefficient:** size/direction of the effect
+- **Standard error:** uncertainty around the coefficient
+- **t-statistic:** coef ÷ SE
+- **p-value:** evidence against “true effect = 0”
+- **Confidence interval:** likely range for the true effect
 
-### Why diagnostics matter (most important part!)
-Even if your main DiD is significant, it may not be causal if:
-- treated and control were already moving differently **before** the policy,
-- the “control” group isn’t a good comparison,
-- or there’s anticipation / selection issues.
+### Why diagnostics matter
+Even if your DiD is significant, it may not be causal if:
+- treated and control were already trending differently **before** the intervention,
+- your control group isn’t comparable,
+- or there are anticipation/selection issues.
 
-### How to read the placebo tests in this app
-- **Placebo A (shift post earlier):**  
-  If it becomes significant *before the real policy date*, that’s a warning sign of **pre-trends**.
-- **Placebo B (pre-only fake cutoff):**  
-  If treated vs control diverge within the pre period, you might be violating parallel trends.
-
-### Rule of thumb (quick decision)
-- ✅ Main DiD looks meaningful **and** placebos are near 0 / not significant  
-  → more consistent with a credible DiD design.
+### Rule of thumb
+- ✅ Main DiD looks meaningful **and** placebo effects are near 0 / not significant  
+  → more consistent with a credible design.
 - ⚠️ Placebos significant or pre-trends visible  
-  → reconsider identification (better controls, narrower window, or add fixed effects / event study).
+  → reconsider identification (better controls, narrower window, add fixed effects/event study).
 """
 )
 
-with st.expander("Dataset requirements (quick list)", expanded=False):
-    st.write(
-        "- One row per unit-time observation.\n"
-        "- `treated` is a group indicator (1 for treated units, 0 for controls).\n"
-        "- `post` indicates the post-treatment periods (1 after treatment begins, 0 before).\n"
-        "- Outcome Y should be numeric (or convertible to numeric).\n"
-        "- Covariates optional; numeric recommended.\n"
-    )
 
 
 
