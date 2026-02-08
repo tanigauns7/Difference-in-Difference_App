@@ -135,33 +135,26 @@ def default_index(cols: pd.Index, preferred: str) -> int:
     return int(cols.get_loc(preferred)) if preferred in cols else 0
 
 def coerce_binary01(s: pd.Series) -> pd.Series:
-    # coerce to 0/1
     sn = pd.to_numeric(s, errors="coerce")
-    # if already 0/1, keep
     vals = set(sn.dropna().unique().tolist())
     if vals.issubset({0, 1}):
         return sn.astype(float)
-    # else rule: >0 becomes 1 else 0
     return (sn.fillna(0) > 0).astype(int).astype(float)
 
 def sorted_unique_times(dfm: pd.DataFrame) -> list:
     t = dfm["time"].copy()
-    # numeric sort if possible
     tn = pd.to_numeric(t, errors="coerce")
     if tn.notna().mean() >= 0.9:
         return sorted(pd.unique(tn.dropna()).tolist())
-    # datetime sort if possible
     td = pd.to_datetime(t, errors="coerce")
     if td.notna().mean() >= 0.9:
         return sorted(pd.unique(td.dropna()).tolist())
-    # fallback
     return sorted(pd.unique(t.dropna()).tolist(), key=lambda x: str(x))
 
 def infer_post_start(dfm: pd.DataFrame):
     post_rows = dfm.loc[dfm["post"] == 1]
     if post_rows.empty:
         return None
-    # earliest post time
     times = post_rows["time"]
     tn = pd.to_numeric(times, errors="coerce")
     if tn.notna().mean() >= 0.9:
@@ -169,7 +162,6 @@ def infer_post_start(dfm: pd.DataFrame):
     td = pd.to_datetime(times, errors="coerce")
     if td.notna().mean() >= 0.9:
         return td.min()
-    # fallback
     return sorted_unique_times(dfm.loc[dfm["post"] == 1])[0]
 
 def has_all_cells(df, treat_col, post_col) -> bool:
@@ -182,7 +174,6 @@ def term_in_results(res, term: str) -> bool:
     return hasattr(res, "params") and term in res.params.index
 
 def robust_term_stats(res, term: str, alpha: float):
-    # for results that already contain robust bse/pvalues/confint
     coef = float(res.params.get(term, np.nan))
     se = float(res.bse.get(term, np.nan))
     pval = float(res.pvalues.get(term, np.nan))
@@ -190,7 +181,6 @@ def robust_term_stats(res, term: str, alpha: float):
     return coef, se, pval, float(ci[0]), float(ci[1])
 
 def twoway_term_stats(res_base, term: str, alpha: float, g1, g2):
-    # two-way clustered covariance matrix
     V = cov_cluster_2groups(res_base, g1, g2)
     idx = list(res_base.params.index).index(term)
     coef = float(res_base.params[term])
@@ -198,7 +188,6 @@ def twoway_term_stats(res_base, term: str, alpha: float, g1, g2):
     tval = coef / se if se > 0 else np.nan
 
     df_resid = float(getattr(res_base, "df_resid", np.nan))
-    # conservative: use t distribution
     pval = float(2 * stats.t.sf(np.abs(tval), df=df_resid)) if np.isfinite(df_resid) else np.nan
     tcrit = float(stats.t.ppf(1 - alpha / 2, df=df_resid)) if np.isfinite(df_resid) else np.nan
     ci_low = coef - tcrit * se if np.isfinite(tcrit) else np.nan
@@ -206,10 +195,6 @@ def twoway_term_stats(res_base, term: str, alpha: float, g1, g2):
     return coef, se, pval, float(ci_low), float(ci_high)
 
 def fit_with_se(df, formula: str, se_mode: str, alpha: float):
-    """
-    se_mode ∈ {"Robust (HC1)", "Cluster: unit", "Cluster: time", "Two-way: unit & time"}
-    Returns: (res_base, res_for_reporting, se_label)
-    """
     model = smf.ols(formula, data=df)
     res_base = model.fit()
 
@@ -226,12 +211,54 @@ def fit_with_se(df, formula: str, se_mode: str, alpha: float):
         return res_base, res_rep, "Cluster-robust (by time)"
 
     if se_mode == "Two-way: unit & time":
-        # no native robust-results wrapper; compute term stats from cov matrix when needed
         return res_base, None, "Two-way cluster (unit & time)"
 
-    # fallback
     res_rep = res_base.get_robustcov_results(cov_type="HC1")
     return res_base, res_rep, "Robust (HC1)"
+
+# =============================
+# DiD Design Checklist (NEW)
+# =============================
+def did_design_checklist(dfm: pd.DataFrame):
+    msgs = []
+    status = "ok"
+
+    n = len(dfm)
+    if n < 30:
+        msgs.append(("warn", f"Only {n} usable rows after cleaning (results may be unstable)."))
+        status = "warn"
+
+    if dfm["treated"].nunique(dropna=True) < 2:
+        msgs.append(("fail", "Treated has no variation (need both 0 and 1)."))
+        status = "fail"
+
+    if dfm["post"].nunique(dropna=True) < 2:
+        msgs.append(("fail", "Post has no variation (need both 0 and 1)."))
+        status = "fail"
+
+    if dfm["unit"].nunique(dropna=True) < 2:
+        msgs.append(("fail", "Too few units (need ≥ 2 units)."))
+        status = "fail"
+
+    if dfm["time"].nunique(dropna=True) < 2:
+        msgs.append(("fail", "Too few time periods (need ≥ 2 time periods)."))
+        status = "fail"
+
+    cell_counts = dfm.groupby(["treated", "post"]).size().reset_index(name="n")
+    have = set(zip(cell_counts["treated"].astype(float), cell_counts["post"].astype(float)))
+    needed = {(0.0, 0.0), (0.0, 1.0), (1.0, 0.0), (1.0, 1.0)}
+    missing = needed - have
+
+    if missing:
+        msgs.append(("fail", f"Missing 2×2 cells: {sorted(list(missing))}. Need treated/control × pre/post."))
+        status = "fail"
+    else:
+        if (cell_counts["n"] < 5).any():
+            msgs.append(("warn", "Some 2×2 cells have < 5 observations (SEs can be unreliable)."))
+            if status != "fail":
+                status = "warn"
+
+    return status, msgs, cell_counts
 
 # =============================
 # Synthetic data generator
@@ -312,8 +339,28 @@ dfm["treated"] = coerce_binary01(dfm["treated"])
 dfm["post"] = coerce_binary01(dfm["post"])
 dfm = dfm.dropna(subset=["y", "unit", "time", "treated", "post"])
 
-if len(dfm) < 20:
-    st.warning("Very few observations after cleaning. Results may be unstable.")
+# =============================
+# DiD design checklist panel (NEW)
+# =============================
+st.subheader("DiD design checklist")
+status, msgs, cell_counts = did_design_checklist(dfm)
+
+if status == "ok":
+    st.success("✅ Dataset looks DiD-ready.")
+elif status == "warn":
+    st.warning("⚠️ Dataset is usable, but results may be unstable.")
+else:
+    st.error("❌ Dataset is NOT DiD-ready. Fix the issues below before running the model.")
+
+for level, text in msgs:
+    st.markdown(f"- {'❌' if level=='fail' else '⚠️'} {text}")
+
+with st.expander("Show 2×2 cell counts (treated/control × pre/post)", expanded=False):
+    st.dataframe(cell_counts, use_container_width=True)
+
+# Stop before model if impossible
+if status == "fail":
+    st.stop()
 
 # =============================
 # Fit main DiD
@@ -396,7 +443,6 @@ with tab4:
     if post_start is None or len(times) < 3:
         st.info("Placebo A unavailable (need a real post period and multiple time points).")
     else:
-        # locate cutoff index (best effort)
         try:
             cutoff_idx = times.index(post_start)
         except ValueError:
@@ -407,9 +453,7 @@ with tab4:
         placebo_cutoff = times[max(0, cutoff_idx - K)]
 
         dfA = dfm.copy()
-        dfA["placebo_post"] = (pd.to_numeric(dfA["time"], errors="coerce") >= placebo_cutoff).astype(int).astype(float) \
-            if pd.to_numeric(pd.Series(times), errors="coerce").notna().mean() >= 0.9 \
-            else (dfA["time"] >= placebo_cutoff).astype(int).astype(float)
+        dfA["placebo_post"] = (dfA["time"] >= placebo_cutoff).astype(int).astype(float)
 
         if not has_all_cells(dfA, "treated", "placebo_post"):
             st.warning("Placebo A missing some 2×2 cells (treated/control × placebo pre/post).")
@@ -429,7 +473,6 @@ with tab4:
                 a2.metric("Std. Error", f"{A_se:.4f}")
                 a3.metric("p-value", f"{A_p:.4g}")
                 a4.metric(f"{int((1-alpha)*100)}% CI", f"[{A_ciL:.4f}, {A_ciH:.4f}]")
-
                 st.caption(f"Real cutoff: {post_start} | Placebo cutoff: {placebo_cutoff} | SE: {A_se_label}")
 
             except Exception as e:
@@ -452,9 +495,7 @@ with tab4:
             fake_cutoff = st.selectbox("Choose fake cutoff within PRE", options=inner, index=len(inner)//2)
 
             dfB = df_pre.copy()
-            dfB["placebo_post_pre"] = (pd.to_numeric(dfB["time"], errors="coerce") >= fake_cutoff).astype(int).astype(float) \
-                if pd.to_numeric(pd.Series(pre_times), errors="coerce").notna().mean() >= 0.9 \
-                else (dfB["time"] >= fake_cutoff).astype(int).astype(float)
+            dfB["placebo_post_pre"] = (dfB["time"] >= fake_cutoff).astype(int).astype(float)
 
             if not has_all_cells(dfB, "treated", "placebo_post_pre"):
                 st.warning("Placebo B missing some 2×2 cells (treated/control × placebo pre/post).")
@@ -474,7 +515,6 @@ with tab4:
                     b2.metric("Std. Error", f"{B_se:.4f}")
                     b3.metric("p-value", f"{B_p:.4g}")
                     b4.metric(f"{int((1-alpha)*100)}% CI", f"[{B_ciL:.4f}, {B_ciH:.4f}]")
-
                     st.caption(f"Fake cutoff (within pre): {fake_cutoff} | SE: {B_se_label}")
 
                 except Exception as e:
@@ -503,6 +543,7 @@ Only if treated and control would have followed **parallel trends** without the 
 If placebo tests are significant, your estimate may be capturing **pre-trends** rather than the treatment effect.
 """
     )
+
 
 
 
